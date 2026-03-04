@@ -1,0 +1,165 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "GenosDB",
+  "projectDescription": "A decentralized P2P graph database with real-time synchronization, RBAC security, and offline-first capabilities.",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/graph-database",
+              "concepts/p2p-sync",
+              "concepts/security-model",
+              "concepts/conflict-resolution"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/crud-operations",
+              "guides/queries",
+              "guides/graph-traversal",
+              "guides/real-time-subscriptions",
+              "guides/p2p-setup"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/overview",
+              "examples/todo-app",
+              "examples/chat-app",
+              "examples/collaborative-editor"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/initialization",
+              "api/put",
+              "api/get",
+              "api/map",
+              "api/link",
+              "api/remove"
+            ]
+          },
+          {
+            "group": "Query Operators",
+            "pages": [
+              "api/operators/comparison",
+              "api/operators/text-search",
+              "api/operators/graph-traversal",
+              "api/operators/logical"
+            ]
+          },
+          {
+            "group": "Modules",
+            "pages": [
+              "modules/security-manager",
+              "modules/genosrtc",
+              "modules/acls",
+              "modules/radix-tree",
+              "modules/geo",
+              "modules/nlq",
+              "modules/audit"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "advanced/architecture-overview",
+              "advanced/worker-architecture",
+              "advanced/hybrid-delta-protocol",
+              "advanced/hybrid-logical-clock",
+              "advanced/cellular-mesh"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "advanced/security/rbac",
+              "advanced/security/webauthn",
+              "advanced/security/zero-trust",
+              "advanced/security/distributed-trust"
+            ]
+          },
+          {
+            "group": "P2P Networking",
+            "pages": [
+              "advanced/p2p/genosrtc-architecture",
+              "advanced/p2p/nostr-signaling",
+              "advanced/p2p/cells-topology",
+              "advanced/p2p/fallback-server"
+            ]
+          },
+          {
+            "group": "Migration & Resources",
+            "pages": [
+              "resources/migration-guide",
+              "resources/bundler-config",
+              "resources/changelog",
+              "resources/roadmap",
+              "resources/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Decentralized P2P graph database with real-time sync",
+    "Advanced graph traversal with recursive $edge operator",
+    "WebAuthn authentication and RBAC security model",
+    "Offline-first with OPFS storage and cross-tab sync",
+    "Cellular mesh topology for massive scalability",
+    "Hybrid delta protocol with full-state fallback",
+    "Modular architecture with optional extensions (Geo, NLQ, Radix Tree, ACLs)"
+  ],
+  "publicApiSurface": [
+    "gdb(name, options)",
+    "db.put(value, id?)",
+    "db.get(id, callback?)",
+    "db.map(...args)",
+    "db.link(sourceId, targetId)",
+    "db.remove(id)",
+    "db.clear()",
+    "db.sm (Security Manager module)",
+    "db.rtc (GenosRTC P2P module)",
+    "db.rx (Radix Tree module)",
+    "db.geo (Geo Query module)",
+    "db.nlq (Natural Language Query module)",
+    "db.audit (Audit module)",
+    "$edge (recursive graph traversal)",
+    "$text (full-text search)",
+    "$eq, $ne, $gt, $gte, $lt, $lte (comparison operators)",
+    "$in, $between, $exists (query operators)",
+    "$and, $or, $not (logical operators)",
+    "$like, $regex (pattern matching)",
+    "$near, $bbox (geo queries)"
+  ]
+}
