@@ -76,7 +76,8 @@
               "api/get",
               "api/map",
               "api/link",
-              "api/remove"
+              "api/remove",
+              "api/use"
             ]
           },
           {

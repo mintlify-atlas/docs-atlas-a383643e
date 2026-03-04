@@ -1,0 +1,255 @@
+---
+title: "db.use()"
+description: "Register middleware functions to process or transform incoming P2P operations"
+---
+
+The `use()` method allows you to register middleware functions that intercept and process incoming P2P operations before they are applied to your local database. Middlewares execute in the order they are registered, providing powerful control over data synchronization.
+
+## Syntax
+
+```javascript
+db.use(middleware)
+```
+
+## Parameters
+
+<ParamField path="middleware" type="async function" required>
+  An asynchronous function that receives an array of incoming operations and must return a (potentially modified) array of operations to be processed.
+  
+  The middleware function receives:
+  - `operations` `{Array}` - Array of operation objects with properties like `type`, `id`, `value`, `timestamp`
+  
+  The middleware must return:
+  - `{Array}` - Modified or filtered array of operations (return `[]` to discard all operations)
+</ParamField>
+
+## Returns
+
+`void` - The method does not return a value.
+
+## Basic Usage
+
+### Logging Middleware
+
+Monitor all incoming P2P operations:
+
+```javascript
+const db = await gdb('my-app', { rtc: true })
+
+// Log all incoming operations
+db.use(async (operations) => {
+  console.log('Received P2P operations:', operations)
+  // Return the operations unmodified to allow processing
+  return operations
+})
+```
+
+### Filtering Operations
+
+Block specific operation types from being processed:
+
+```javascript
+// Block all 'remove' operations
+db.use(async (operations) => {
+  const filtered = operations.filter(op => op.type !== 'remove')
+  console.log(`Blocked ${operations.length - filtered.length} remove operations`)
+  return filtered
+})
+```
+
+### Transforming Data
+
+Modify incoming data before it's stored:
+
+```javascript
+// Transform all incoming user names to uppercase
+db.use(async (operations) => {
+  return operations.map(op => {
+    if (op.value && op.value.type === 'user') {
+      return {
+        ...op,
+        value: {
+          ...op.value,
+          name: op.value.name.toUpperCase()
+        }
+      }
+    }
+    return op
+  })
+})
+```
+
+## Advanced Use Cases
+
+### Content Moderation
+
+Implement basic content filtering:
+
+```javascript
+const blockedWords = ['spam', 'advertisement']
+
+db.use(async (operations) => {
+  return operations.filter(op => {
+    if (op.value && op.value.text) {
+      const text = op.value.text.toLowerCase()
+      const hasBlockedWord = blockedWords.some(word => text.includes(word))
+      
+      if (hasBlockedWord) {
+        console.warn(`Blocked message containing prohibited content: ${op.id}`)
+        return false
+      }
+    }
+    return true
+  })
+})
+```
+
+### Rate Limiting
+
+Prevent spam by limiting operations from specific sources:
+
+```javascript
+const operationCounts = new Map()
+const RATE_LIMIT = 10 // operations per minute
+const RATE_WINDOW = 60000 // 1 minute
+
+db.use(async (operations) => {
+  const now = Date.now()
+  
+  return operations.filter(op => {
+    const source = op.source || 'unknown'
+    const record = operationCounts.get(source) || { count: 0, timestamp: now }
+    
+    // Reset counter if window expired
+    if (now - record.timestamp > RATE_WINDOW) {
+      record.count = 0
+      record.timestamp = now
+    }
+    
+    // Increment and check limit
+    record.count++
+    operationCounts.set(source, record)
+    
+    if (record.count > RATE_LIMIT) {
+      console.warn(`Rate limit exceeded for source: ${source}`)
+      return false
+    }
+    
+    return true
+  })
+})
+```
+
+### Validation
+
+Ensure incoming data meets your schema requirements:
+
+```javascript
+db.use(async (operations) => {
+  return operations.filter(op => {
+    // Validate user objects
+    if (op.value && op.value.type === 'user') {
+      const hasName = typeof op.value.name === 'string' && op.value.name.length > 0
+      const hasEmail = typeof op.value.email === 'string' && op.value.email.includes('@')
+      
+      if (!hasName || !hasEmail) {
+        console.error(`Invalid user data rejected: ${op.id}`)
+        return false
+      }
+    }
+    
+    return true
+  })
+})
+```
+
+## Multiple Middlewares
+
+Middlewares execute in registration order. Each middleware receives the output of the previous one:
+
+```javascript
+const db = await gdb('my-app', { rtc: true })
+
+// First middleware: Log operations
+db.use(async (operations) => {
+  console.log(`[Logger] Received ${operations.length} operations`)
+  return operations
+})
+
+// Second middleware: Filter by type
+db.use(async (operations) => {
+  const filtered = operations.filter(op => op.type === 'put')
+  console.log(`[Filter] Passed ${filtered.length} put operations`)
+  return filtered
+})
+
+// Third middleware: Transform data
+db.use(async (operations) => {
+  const transformed = operations.map(op => ({
+    ...op,
+    value: { ...op.value, processedAt: Date.now() }
+  }))
+  console.log(`[Transform] Added timestamps to ${transformed.length} operations`)
+  return transformed
+})
+```
+
+## Operation Object Structure
+
+Each operation in the array has the following structure:
+
+```typescript
+{
+  type: 'put' | 'remove' | 'link',
+  id: string,
+  value?: object,
+  timestamp: number,
+  source?: string,
+  // ... other internal fields
+}
+```
+
+## Important Notes
+
+<Warning>
+Middleware functions are **synchronous with P2P message processing**. Heavy computation in middlewares can block synchronization. For expensive operations, consider using Web Workers or defer processing.
+</Warning>
+
+<Note>
+Middlewares only process **incoming P2P operations** from other peers. They do not intercept local operations made via `db.put()`, `db.remove()`, etc.
+</Note>
+
+<Tip>
+For security-critical applications, use the [Security Manager](/modules/security-manager) with RBAC and the [ACLs Module](/modules/acls) for fine-grained permissions instead of relying solely on middleware filtering.
+</Tip>
+
+## Best Practices
+
+1. **Always return an array** - Even if empty, always return an array from your middleware
+2. **Keep it fast** - Avoid expensive operations that could block synchronization
+3. **Log dropped operations** - When filtering, log what was blocked for debugging
+4. **Chain carefully** - Remember that middlewares execute in order and each receives the previous output
+5. **Validate thoroughly** - Don't trust incoming data; always validate against your schema
+
+## Related APIs
+
+<CardGroup cols={2}>
+  <Card title="db.map()" icon="filter" href="/api/map">
+    Query and filter data with reactive subscriptions
+  </Card>
+  <Card title="Security Manager" icon="shield-halved" href="/modules/security-manager">
+    RBAC and cryptographic verification for operations
+  </Card>
+  <Card title="ACLs Module" icon="lock" href="/modules/acls">
+    Node-level permissions and access control
+  </Card>
+  <Card title="Audit Module" icon="gavel" href="/modules/audit">
+    AI-powered content moderation with custom policies
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [P2P Setup Guide](/guides/p2p-setup) - Configure P2P networking and understand data flow
+- [Security Model](/concepts/security-model) - Understand GenosDB's security architecture
+- [Audit Module](/modules/audit) - Advanced content moderation with AI
