@@ -1,0 +1,453 @@
+---
+title: 'Logical Operators'
+description: 'Combine query conditions with $and, $or, and $not operators'
+---
+
+## Overview
+
+Logical operators enable complex query logic by combining multiple conditions. They work with all other GenosDB operators to create sophisticated filters.
+
+## Operators
+
+### $and - All Conditions Must Match
+
+Matches nodes where all specified conditions are true.
+
+```javascript
+const { results } = await db.map({
+  query: {
+    $and: [
+      { type: "User" },
+      { age: { $gte: 18 } },
+      { verified: true }
+    ]
+  }
+})
+```
+
+<Info>
+**Implicit $and**: When you specify multiple fields at the top level, GenosDB automatically applies $and:
+
+```javascript
+// These are equivalent
+{ type: "User", age: { $gte: 18 } }
+{ $and: [{ type: "User" }, { age: { $gte: 18 } }] }
+```
+</Info>
+
+### $or - Any Condition Must Match
+
+Matches nodes where at least one condition is true.
+
+```javascript
+const { results } = await db.map({
+  query: {
+    $or: [
+      { type: "admin" },
+      { type: "moderator" },
+      { type: "editor" }
+    ]
+  }
+})
+```
+
+### $not - Negation
+
+Matches nodes where the condition is NOT true.
+
+```javascript
+const { results } = await db.map({
+  query: {
+    type: "User",
+    country: { $not: { $eq: "USA" } }
+  }
+})
+
+// Simplified with $ne
+const { results } = await db.map({
+  query: {
+    type: "User",
+    country: { $ne: "USA" }
+  }
+})
+```
+
+## Examples
+
+### Multiple Conditions (AND)
+
+```javascript
+// Active users over 18 with email
+const { results } = await db.map({
+  query: {
+    $and: [
+      { type: "User" },
+      { status: "active" },
+      { age: { $gte: 18 } },
+      { email: { $exists: true } }
+    ]
+  }
+})
+
+// Implicit $and (simpler)
+const { results } = await db.map({
+  query: {
+    type: "User",
+    status: "active",
+    age: { $gte: 18 },
+    email: { $exists: true }
+  }
+})
+```
+
+### Alternative Conditions (OR)
+
+```javascript
+// Premium or verified users
+const { results } = await db.map({
+  query: {
+    type: "User",
+    $or: [
+      { premium: true },
+      { verified: true }
+    ]
+  }
+})
+
+// Multiple role types
+const { results } = await db.map({
+  query: {
+    $or: [
+      { role: "admin" },
+      { role: "moderator" },
+      { role: "editor" }
+    ]
+  }
+})
+
+// Better alternative with $in
+const { results } = await db.map({
+  query: {
+    role: { $in: ["admin", "moderator", "editor"] }
+  }
+})
+```
+
+### Negation Examples
+
+```javascript
+// Users NOT from USA
+const { results } = await db.map({
+  query: {
+    type: "User",
+    country: { $not: { $eq: "USA" } }
+  }
+})
+
+// Tasks NOT completed
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    status: { $ne: "completed" }
+  }
+})
+
+// Files without tags
+const { results } = await db.map({
+  query: {
+    type: "File",
+    tags: { $not: { $exists: true } }
+  }
+})
+```
+
+### Combining AND + OR
+
+```javascript
+// Active users who are either premium OR verified
+const { results } = await db.map({
+  query: {
+    type: "User",
+    status: "active",
+    $or: [
+      { premium: true },
+      { verified: true }
+    ]
+  }
+})
+
+// Products in stock AND (on sale OR under $50)
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    inStock: true,
+    $or: [
+      { onSale: true },
+      { price: { $lt: 50 } }
+    ]
+  }
+})
+```
+
+### Complex Nested Logic
+
+```javascript
+// (Admin OR Moderator) AND (Verified OR Premium)
+const { results } = await db.map({
+  query: {
+    $and: [
+      {
+        $or: [
+          { role: "admin" },
+          { role: "moderator" }
+        ]
+      },
+      {
+        $or: [
+          { verified: true },
+          { premium: true }
+        ]
+      }
+    ]
+  }
+})
+```
+
+### Age Range with OR
+
+```javascript
+// Users under 18 OR over 65
+const { results } = await db.map({
+  query: {
+    type: "User",
+    $or: [
+      { age: { $lt: 18 } },
+      { age: { $gt: 65 } }
+    ]
+  }
+})
+
+// Excluding age range (NOT between 18-65)
+const { results } = await db.map({
+  query: {
+    type: "User",
+    age: {
+      $not: { $between: [18, 65] }
+    }
+  }
+})
+```
+
+### Multi-Field Search
+
+```javascript
+// Search across multiple fields
+const searchUsers = async (term) => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      $or: [
+        { name: { $regex: term } },
+        { email: { $regex: term } },
+        { username: { $regex: term } }
+      ]
+    }
+  })
+  
+  return results
+}
+
+await searchUsers("john")
+```
+
+### Status Filtering
+
+```javascript
+// Tasks that are pending OR in-progress (not completed)
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    status: { $ne: "completed" }
+  }
+})
+
+// Explicit OR version
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    $or: [
+      { status: "pending" },
+      { status: "in-progress" }
+    ]
+  }
+})
+```
+
+### Date Range Queries
+
+```javascript
+// Posts from this year OR marked as featured
+const yearStart = new Date("2024-01-01").getTime()
+
+const { results } = await db.map({
+  query: {
+    type: "Post",
+    $or: [
+      { createdAt: { $gte: yearStart } },
+      { featured: true }
+    ]
+  }
+})
+```
+
+### Permission-Based Queries
+
+```javascript
+// Content accessible by user (public OR owned by user)
+const currentUserId = "user:alice"
+
+const { results } = await db.map({
+  query: {
+    type: "Document",
+    $or: [
+      { public: true },
+      { owner: currentUserId }
+    ]
+  }
+})
+```
+
+### Product Filters
+
+```javascript
+// Premium products OR highly rated
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    inStock: true,
+    $or: [
+      { price: { $gt: 500 } },
+      { rating: { $gte: 4.5 } }
+    ]
+  },
+  field: "rating",
+  order: "desc"
+})
+```
+
+### Real-Time Monitoring
+
+```javascript
+// Monitor high-priority or overdue tasks
+const { unsubscribe } = await db.map(
+  {
+    query: {
+      type: "Task",
+      $or: [
+        { priority: "high" },
+        { dueDate: { $lt: Date.now() } }
+      ]
+    }
+  },
+  ({ id, value, action }) => {
+    if (action === "added") {
+      console.log("Alert: New urgent task", value)
+      notifyUser(value)
+    }
+  }
+)
+```
+
+### Excluding Multiple Values
+
+```javascript
+// Users NOT in specific countries
+const { results } = await db.map({
+  query: {
+    type: "User",
+    country: {
+      $not: { $in: ["USA", "Canada", "Mexico"] }
+    }
+  }
+})
+```
+
+### Complex Graph Queries
+
+```javascript
+// Find files in Documents folder that are either PDFs OR over 1MB
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Documents",
+    $edge: {
+      type: "File",
+      $or: [
+        { extension: "pdf" },
+        { size: { $gt: 1024 * 1024 } }
+      ]
+    }
+  }
+})
+```
+
+## Operator Precedence
+
+GenosDB evaluates operators in this order:
+
+1. **Field-level operators** ($gt, $lt, $eq, etc.)
+2. **$not** (negation)
+3. **$and** (conjunction)
+4. **$or** (disjunction)
+
+```javascript
+// This query:
+{
+  $or: [
+    { age: { $gt: 18 }, verified: true },
+    { premium: true }
+  ]
+}
+
+// Is evaluated as:
+// (age > 18 AND verified) OR premium
+```
+
+## Best Practices
+
+<Tip>
+**Use $in instead of multiple $or**: When checking equality across multiple values:
+
+```javascript
+// ✅ Good
+{ role: { $in: ["admin", "editor", "moderator"] } }
+
+// ❌ Avoid
+{ $or: [{ role: "admin" }, { role: "editor" }, { role: "moderator" }] }
+```
+</Tip>
+
+<Tip>
+**Implicit $and is cleaner**: For simple AND conditions, omit $and:
+
+```javascript
+// ✅ Cleaner
+{ type: "User", status: "active", age: { $gte: 18 } }
+
+// ❌ Verbose
+{ $and: [{ type: "User" }, { status: "active" }, { age: { $gte: 18 } }] }
+```
+</Tip>
+
+<Warning>
+**Complex OR queries can be slow**: When using $or with many conditions:
+- Each condition is evaluated separately
+- Consider restructuring data if performance is an issue
+- Use indexes (enable `ii`, `rx`, or `geo` modules) when available
+</Warning>
+
+## Related Operators
+
+- [Comparison Operators](/api/operators/comparison) - $eq, $ne, $gt, $lt, etc.
+- [Text Search](/api/operators/text-search) - $text, $regex
+- [Graph Traversal](/api/operators/graph-traversal) - $edge

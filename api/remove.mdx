@@ -1,0 +1,340 @@
+---
+title: 'remove() - Delete Nodes'
+description: 'Delete nodes and their associated edges from the database'
+---
+
+## Overview
+
+The `remove()` method deletes a node from the database along with all references to it. The deletion is automatically synchronized across all connected peers when P2P is enabled.
+
+## Signature
+
+```typescript
+await db.remove(id: string): Promise<void>
+```
+
+## Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the node to delete.
+</ParamField>
+
+## Return Value
+
+<ResponseField name="void" type="Promise<void>">
+  Returns a promise that resolves when the node is deleted.
+</ResponseField>
+
+## Examples
+
+### Basic Deletion
+
+```javascript
+const taskId = await db.put({ type: "Task", text: "Buy milk" })
+
+// Delete the task
+await db.remove(taskId)
+
+console.log("Task deleted")
+```
+
+### Delete with Verification
+
+```javascript
+const userId = "user:ana"
+
+// Check if exists
+const { result: before } = await db.get(userId)
+if (before) {
+  await db.remove(userId)
+  console.log("User deleted")
+}
+
+// Verify deletion
+const { result: after } = await db.get(userId)
+console.log("User exists after delete:", after !== null) // false
+```
+
+### Delete Multiple Nodes
+
+```javascript
+const nodeIds = ["task-1", "task-2", "task-3"]
+
+for (const id of nodeIds) {
+  await db.remove(id)
+}
+
+console.log("All tasks deleted")
+```
+
+### Batch Delete with Filter
+
+```javascript
+// Find all completed tasks
+const { results } = await db.map({
+  query: { type: "Task", completed: true }
+})
+
+// Delete them
+for (const task of results) {
+  await db.remove(task.id)
+}
+
+console.log(`Deleted ${results.length} completed tasks`)
+```
+
+### Delete with Edge Cleanup
+
+```javascript
+// Delete a folder (and optionally its contents)
+const deleteFolder = async (folderId) => {
+  // Get the folder and its edges
+  const { result: folder } = await db.get(folderId)
+  
+  if (!folder) return
+  
+  // Delete all linked files
+  for (const fileId of folder.edges) {
+    await db.remove(fileId)
+  }
+  
+  // Delete the folder itself
+  await db.remove(folderId)
+  
+  console.log("Folder and contents deleted")
+}
+
+await deleteFolder("folder:documents")
+```
+
+### Cascading Delete
+
+```javascript
+// Delete a post and all its comments
+const deletePost = async (postId) => {
+  const { result: post } = await db.get(postId)
+  
+  if (!post) return
+  
+  // Delete all comments
+  const { results: comments } = await db.map({
+    query: {
+      id: postId,
+      $edge: { type: "Comment" }
+    }
+  })
+  
+  for (const comment of comments) {
+    await db.remove(comment.id)
+  }
+  
+  // Delete the post
+  await db.remove(postId)
+  
+  console.log(`Deleted post and ${comments.length} comments`)
+}
+
+await deletePost("post-123")
+```
+
+### Delete User Account
+
+```javascript
+const deleteUserAccount = async (userId) => {
+  // Remove user's posts
+  const { results: posts } = await db.map({
+    query: { type: "Post", author: userId }
+  })
+  
+  for (const post of posts) {
+    await db.remove(post.id)
+  }
+  
+  // Remove user's comments
+  const { results: comments } = await db.map({
+    query: { type: "Comment", author: userId }
+  })
+  
+  for (const comment of comments) {
+    await db.remove(comment.id)
+  }
+  
+  // Remove user profile
+  await db.remove(userId)
+  
+  console.log("User account deleted")
+}
+
+await deleteUserAccount("user:bob")
+```
+
+### Soft Delete Alternative
+
+```javascript
+// Instead of deleting, mark as deleted
+const softDelete = async (id) => {
+  const { result: node } = await db.get(id)
+  
+  if (!node) return
+  
+  await db.put({
+    ...node.value,
+    deleted: true,
+    deletedAt: Date.now()
+  }, id)
+  
+  console.log("Node marked as deleted")
+}
+
+// Query active nodes only
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    deleted: { $exists: false }
+  }
+})
+```
+
+### Real-Time Delete Notifications
+
+```javascript
+// Monitor deletions
+const { unsubscribe } = await db.map(
+  { query: { type: "Task" } },
+  ({ id, value, action }) => {
+    if (action === "removed") {
+      console.log(`Task ${id} was deleted`)
+      removeFromUI(id)
+    }
+  }
+)
+
+// Later, delete a task
+await db.remove("task-123")
+// Callback fires immediately
+```
+
+### Conditional Delete
+
+```javascript
+const deleteIfOld = async (id, maxAge) => {
+  const { result: node } = await db.get(id)
+  
+  if (!node) return false
+  
+  const age = Date.now() - node.value.createdAt
+  
+  if (age > maxAge) {
+    await db.remove(id)
+    console.log(`Deleted old node: ${id}`)
+    return true
+  }
+  
+  return false
+}
+
+// Delete nodes older than 30 days
+const thirtyDays = 30 * 24 * 60 * 60 * 1000
+await deleteIfOld("task-old", thirtyDays)
+```
+
+### Permission-Based Delete
+
+```javascript
+// With Security Manager and ACLs
+const deleteNode = async (nodeId) => {
+  try {
+    // Check permission (if SM is enabled)
+    if (db.sm) {
+      await db.sm.executeWithPermission("delete")
+    }
+    
+    // Delete the node
+    await db.remove(nodeId)
+    
+    console.log("Node deleted")
+  } catch (error) {
+    console.error("Permission denied:", error.message)
+  }
+}
+
+await deleteNode("protected-node")
+```
+
+### Clear All Data
+
+```javascript
+// Delete all nodes of a specific type
+const clearType = async (type) => {
+  const { results } = await db.map({
+    query: { type }
+  })
+  
+  for (const node of results) {
+    await db.remove(node.id)
+  }
+  
+  console.log(`Deleted ${results.length} nodes of type ${type}`)
+}
+
+await clearType("Task")
+
+// Or use db.clear() to remove everything
+await db.clear()
+console.log("All data cleared")
+```
+
+## Behavior Notes
+
+<Warning>
+**Irreversible**: Deletion is permanent and cannot be undone. There is no built-in undo mechanism.
+</Warning>
+
+<Info>
+**Edge Cleanup**: When a node is deleted, all edges pointing to it are automatically cleaned up. The node's own edges are also removed.
+</Info>
+
+<Tip>
+**Soft Delete Pattern**: For recoverable deletions, consider marking nodes as deleted instead of removing them:
+
+```javascript
+await db.put({ ...node.value, deleted: true }, id)
+```
+</Tip>
+
+## P2P Synchronization
+
+When `rtc: true` is enabled, deletions are synchronized across all peers:
+
+```javascript
+// Peer A deletes a node
+await db.remove("task-123")
+
+// Peer B's reactive subscription fires automatically
+db.map({ query: { type: "Task" } }, ({ id, action }) => {
+  if (action === "removed" && id === "task-123") {
+    console.log("Task was deleted by another peer")
+  }
+})
+```
+
+## Conflict Resolution
+
+If a node is deleted on one peer and updated on another simultaneously:
+
+1. **Delete Wins**: The deletion takes precedence (tombstone marker)
+2. **HLC Timestamps**: Hybrid Logical Clock ensures deterministic ordering
+3. **Eventual Consistency**: All peers converge to the same state
+
+## Performance Considerations
+
+- **O(1) Delete**: Node removal is constant time
+- **Index Updates**: If modules like Radix Index are enabled, indexes are updated automatically
+- **Batch Operations**: For large-scale deletions, consider batching and using `saveDelay` configuration
+
+## Related Methods
+
+- [put()](/api/put) - Create or update nodes
+- [get()](/api/get) - Retrieve nodes
+- [clear()](/api/initialization#clear) - Remove all nodes
+- [map()](/api/map) - Query nodes for deletion

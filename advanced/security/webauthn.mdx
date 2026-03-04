@@ -1,0 +1,428 @@
+---
+title: "WebAuthn Authentication"
+description: "Passwordless biometric and hardware-key authentication for GenosDB"
+---
+
+GenosDB's Security Manager integrates **WebAuthn** (Web Authentication API) to provide passwordless, phishing-resistant authentication using biometrics, hardware security keys, or platform authenticators.
+
+## Overview
+
+WebAuthn enables:
+
+<CardGroup cols={2}>
+  <Card title="Passwordless Login" icon="unlock-keyhole">
+    No passwords to remember, type, or steal
+  </Card>
+  <Card title="Phishing-Resistant" icon="shield-virus">
+    Cryptographic challenges prevent phishing attacks
+  </Card>
+  <Card title="Hardware-Backed" icon="microchip">
+    Private keys stored in secure hardware (TPM, Secure Enclave)
+  </Card>
+  <Card title="Biometric Unlock" icon="fingerprint">
+    Face ID, Touch ID, Windows Hello, fingerprint sensors
+  </Card>
+</CardGroup>
+
+## How It Works
+
+GenosDB uses WebAuthn to encrypt/decrypt the user's Ethereum private key:
+
+1. **Registration**: User creates identity with mnemonic phrase
+2. **Protection**: Private key is encrypted using WebAuthn-derived secret
+3. **Storage**: Encrypted key stored in browser's secure storage
+4. **Login**: WebAuthn biometric/hardware challenge decrypts the key
+5. **Session**: Decrypted key is used for signing operations
+
+<Info>
+  The private key **never leaves the device** and is only decrypted after successful WebAuthn verification.
+</Info>
+
+## Registration Flow
+
+### Step 1: Create New Identity
+
+```javascript
+import { gdb } from 'genosdb';
+
+const db = await gdb('mydb', {
+  rtc: true,
+  sm: { superAdmins: ['0x...'] }
+});
+
+const sm = db.sm;
+
+// Create new Ethereum identity
+const result = await sm.startNewUserRegistration();
+
+console.log('Mnemonic (save this!):', result.mnemonic);
+console.log('Ethereum Address:', result.address);
+// Display mnemonic to user for backup
+```
+
+<Warning>
+  Users **must** save their mnemonic phrase securely. It's the only way to recover access if WebAuthn fails or on a new device.
+</Warning>
+
+### Step 2: Protect with WebAuthn
+
+```javascript
+try {
+  await sm.protectCurrentIdentityWithWebAuthn();
+  console.log('✓ Identity protected with WebAuthn');
+  // Private key is now encrypted and stored
+} catch (error) {
+  console.error('WebAuthn protection failed:', error);
+  // Fallback: user must use mnemonic for future logins
+}
+```
+
+**What happens internally:**
+
+1. Browser prompts for biometric/hardware authenticator
+2. WebAuthn creates a new credential tied to the origin
+3. Credential's public key is used to derive encryption key
+4. User's private key is encrypted with this key
+5. Encrypted key is stored in browser storage
+
+## Login Flow
+
+### WebAuthn Login (Biometric)
+
+```javascript
+const db = await gdb('mydb', {
+  rtc: true,
+  sm: { superAdmins: ['0x...'] }
+});
+
+const sm = db.sm;
+
+try {
+  const address = await sm.loginCurrentUserWithWebAuthn();
+  console.log('✓ Logged in as:', address);
+  // User can now perform signed operations
+} catch (error) {
+  console.error('WebAuthn login failed:', error);
+  // Show mnemonic input form
+}
+```
+
+**What happens internally:**
+
+1. Browser prompts for biometric/authenticator
+2. WebAuthn verifies the user
+3. Credential provides decryption key
+4. Private key is decrypted into memory
+5. User session is established
+
+### Mnemonic Login (Fallback)
+
+If WebAuthn fails or user is on a new device:
+
+```javascript
+const mnemonic = prompt('Enter your 12-word mnemonic phrase');
+
+try {
+  const address = await sm.loginOrRecoverUserWithMnemonic(mnemonic);
+  console.log('✓ Recovered identity:', address);
+  
+  // Optionally re-enable WebAuthn on this device
+  await sm.protectCurrentIdentityWithWebAuthn();
+} catch (error) {
+  console.error('Invalid mnemonic');
+}
+```
+
+## Session Management
+
+### Check Login Status
+
+```javascript
+const address = sm.getActiveEthAddress();
+
+if (address) {
+  console.log('Logged in as:', address);
+} else {
+  console.log('Not logged in');
+  // Show login form
+}
+```
+
+### Logout
+
+```javascript
+await sm.clearSecurity();
+console.log('Logged out');
+// Private key cleared from memory
+// WebAuthn-protected key remains in storage for next login
+```
+
+## UI Integration Example
+
+### Complete Authentication UI
+
+```javascript
+import { gdb } from 'genosdb';
+
+let db, sm;
+
+async function init() {
+  db = await gdb('myapp', {
+    rtc: true,
+    sm: { superAdmins: ['0xALICE...'] }
+  });
+  sm = db.sm;
+  
+  updateUI();
+}
+
+// Registration
+async function handleRegister() {
+  try {
+    const { mnemonic, address } = await sm.startNewUserRegistration();
+    
+    // Show mnemonic to user
+    alert(`SAVE THIS MNEMONIC:\n\n${mnemonic}\n\nAddress: ${address}`);
+    
+    // Enable WebAuthn
+    await sm.protectCurrentIdentityWithWebAuthn();
+    
+    updateUI();
+  } catch (error) {
+    alert('Registration failed: ' + error.message);
+  }
+}
+
+// WebAuthn Login
+async function handleWebAuthnLogin() {
+  try {
+    const address = await sm.loginCurrentUserWithWebAuthn();
+    console.log('Logged in:', address);
+    updateUI();
+  } catch (error) {
+    alert('WebAuthn login failed. Use mnemonic recovery.');
+  }
+}
+
+// Mnemonic Login
+async function handleMnemonicLogin() {
+  const mnemonic = prompt('Enter your 12-word mnemonic:');
+  if (!mnemonic) return;
+  
+  try {
+    const address = await sm.loginOrRecoverUserWithMnemonic(mnemonic);
+    console.log('Recovered:', address);
+    
+    // Optionally re-enable WebAuthn
+    const enableWebAuthn = confirm('Enable biometric login on this device?');
+    if (enableWebAuthn) {
+      await sm.protectCurrentIdentityWithWebAuthn();
+    }
+    
+    updateUI();
+  } catch (error) {
+    alert('Invalid mnemonic');
+  }
+}
+
+// Logout
+async function handleLogout() {
+  await sm.clearSecurity();
+  updateUI();
+}
+
+// Update UI based on auth state
+function updateUI() {
+  const address = sm.getActiveEthAddress();
+  
+  if (address) {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('appSection').style.display = 'block';
+    document.getElementById('userAddress').textContent = address;
+  } else {
+    document.getElementById('loginSection').style.display = 'block';
+    document.getElementById('appSection').style.display = 'none';
+  }
+}
+
+init();
+```
+
+### HTML Structure
+
+```html
+<!-- Login Section -->
+<div id="loginSection">
+  <h2>Login to GenosDB App</h2>
+  <button onclick="handleWebAuthnLogin()">Login with Biometrics</button>
+  <button onclick="handleMnemonicLogin()">Recover with Mnemonic</button>
+  <button onclick="handleRegister()">Create New Account</button>
+</div>
+
+<!-- App Section -->
+<div id="appSection" style="display: none">
+  <p>Logged in as: <span id="userAddress"></span></p>
+  <button onclick="handleLogout()">Logout</button>
+  <!-- Your app content here -->
+</div>
+```
+
+## Platform Support
+
+WebAuthn is supported by all modern browsers:
+
+| Browser | Platform Authenticator | Hardware Keys |
+|---------|------------------------|---------------|
+| Chrome 67+ | ✓ Windows Hello, Touch ID | ✓ FIDO2 |
+| Firefox 60+ | ✓ Windows Hello | ✓ FIDO2 |
+| Safari 14+ | ✓ Touch ID, Face ID | ✓ FIDO2 |
+| Edge 18+ | ✓ Windows Hello | ✓ FIDO2 |
+
+<Info>
+  WebAuthn requires **HTTPS** or `localhost` for security. It will not work on `http://` production sites.
+</Info>
+
+## Security Considerations
+
+### What WebAuthn Protects
+
+<CardGroup cols={2}>
+  <Card title="Phishing" icon="fish">
+    Credential is origin-bound; can't be used on fake sites
+  </Card>
+  <Card title="Keylogging" icon="keyboard">
+    No password to intercept
+  </Card>
+  <Card title="Database Breach" icon="database">
+    Private key never sent to server
+  </Card>
+  <Card title="Man-in-the-Middle" icon="user-secret">
+    Cryptographic challenge-response prevents MITM
+  </Card>
+</CardGroup>
+
+### What WebAuthn Doesn't Protect
+
+<Warning>
+  **Device Loss**: If the user loses their device AND didn't save their mnemonic, access is permanently lost. Always enforce mnemonic backup during registration.
+</Warning>
+
+**Mitigation:**
+
+```javascript
+// Force mnemonic confirmation before enabling WebAuthn
+const { mnemonic } = await sm.startNewUserRegistration();
+
+// Display mnemonic
+alert(`SAVE THIS:\n${mnemonic}`);
+
+// Verify user wrote it down
+const confirmation = prompt('Enter word #3 from your mnemonic:');
+const words = mnemonic.split(' ');
+
+if (confirmation !== words[2]) {
+  alert('Incorrect! Please write down your mnemonic.');
+  return;
+}
+
+// Now safe to enable WebAuthn
+await sm.protectCurrentIdentityWithWebAuthn();
+```
+
+## Advanced: Multiple Devices
+
+WebAuthn credentials are **device-specific**. For multi-device access:
+
+### Option 1: Mnemonic Recovery on New Device
+
+```javascript
+// On new device
+const mnemonic = /* user enters saved mnemonic */;
+await sm.loginOrRecoverUserWithMnemonic(mnemonic);
+
+// Enable WebAuthn on this device too
+await sm.protectCurrentIdentityWithWebAuthn();
+```
+
+### Option 2: Platform-Synced Authenticators (Future)
+
+Some platforms (Apple, Google) are introducing synced passkeys:
+
+- iCloud Keychain syncs Touch ID/Face ID across Apple devices
+- Google Password Manager syncs across Chrome instances
+
+These would allow seamless multi-device WebAuthn.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="WebAuthn not available error">
+    **Cause**: Browser doesn't support WebAuthn or site is not HTTPS
+    
+    **Solution**:
+    ```javascript
+    if (!window.PublicKeyCredential) {
+      alert('Your browser doesn\'t support WebAuthn. Please use Chrome 67+, Firefox 60+, or Safari 14+');
+      // Fallback to mnemonic-only auth
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="NotAllowedError during registration">
+    **Cause**: User cancelled the authenticator prompt or timeout
+    
+    **Solution**: Let user retry or skip WebAuthn
+    ```javascript
+    try {
+      await sm.protectCurrentIdentityWithWebAuthn();
+    } catch (error) {
+      if (error.name === 'NotAllowedError') {
+        console.log('User cancelled authenticator');
+        // Allow continuing without WebAuthn
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Credential not found during login">
+    **Cause**: User is on a different device or cleared browser data
+    
+    **Solution**: Show mnemonic recovery option
+    ```javascript
+    try {
+      await sm.loginCurrentUserWithWebAuthn();
+    } catch (error) {
+      if (error.name === 'NotFoundError') {
+        alert('No saved credential. Please use mnemonic recovery.');
+        showMnemonicInput();
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Works on localhost but not production">
+    **Cause**: Production site is using HTTP instead of HTTPS
+    
+    **Solution**: Enable HTTPS on your production site. WebAuthn requires secure context.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+1. **Always enforce mnemonic backup** before enabling WebAuthn
+2. **Provide mnemonic recovery** as fallback login option
+3. **Test on target platforms** (iOS Safari, Android Chrome, Windows, macOS)
+4. **Use clear UX** explaining biometric/hardware key prompts
+5. **Handle errors gracefully** with helpful messages
+6. **Consider privacy**: Don't force biometrics if user prefers mnemonic
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="RBAC" icon="users-gear" href="/advanced/security/rbac">
+    Role-based access control system
+  </Card>
+  <Card title="Zero-Trust Model" icon="shield-check" href="/advanced/security/zero-trust">
+    Security architecture principles
+  </Card>
+</CardGroup>

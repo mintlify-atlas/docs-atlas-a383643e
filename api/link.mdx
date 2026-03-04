@@ -1,0 +1,318 @@
+---
+title: 'link() - Create Relationships'
+description: 'Create directed edges between nodes to build graph structures'
+---
+
+## Overview
+
+The `link()` method creates a directed relationship (edge) between two nodes, establishing the foundation for graph-based data structures in GenosDB.
+
+## Signature
+
+```typescript
+await db.link(
+  sourceId: string, 
+  targetId: string
+): Promise<void>
+```
+
+## Parameters
+
+<ParamField path="sourceId" type="string" required>
+  The ID of the source node (the node that will have an outgoing edge).
+</ParamField>
+
+<ParamField path="targetId" type="string" required>
+  The ID of the target node (the node being linked to).
+</ParamField>
+
+## Return Value
+
+<ResponseField name="void" type="Promise<void>">
+  Returns a promise that resolves when the link is created.
+</ResponseField>
+
+## Examples
+
+### Basic Link
+
+```javascript
+// Create two nodes
+const userId = await db.put({ type: "User", name: "Ana" })
+const postId = await db.put({ type: "Post", title: "Hello World" })
+
+// Link user to post
+await db.link(userId, postId)
+
+console.log("User linked to post")
+```
+
+### Building a Folder Hierarchy
+
+```javascript
+// Create folders
+const rootId = await db.put({ type: "Folder", name: "Root" })
+const docsId = await db.put({ type: "Folder", name: "Documents" })
+const photosId = await db.put({ type: "Folder", name: "Photos" })
+
+// Create folder structure
+await db.link(rootId, docsId)    // Root -> Documents
+await db.link(rootId, photosId)  // Root -> Photos
+
+// Create files
+const file1 = await db.put({ type: "File", name: "report.pdf" })
+const file2 = await db.put({ type: "File", name: "vacation.jpg" })
+
+// Link files to folders
+await db.link(docsId, file1)    // Documents -> report.pdf
+await db.link(photosId, file2)  // Photos -> vacation.jpg
+```
+
+### Social Network - Following
+
+```javascript
+const alice = await db.put({ type: "User", name: "Alice" })
+const bob = await db.put({ type: "User", name: "Bob" })
+const charlie = await db.put({ type: "User", name: "Charlie" })
+
+// Alice follows Bob and Charlie
+await db.link(alice, bob)
+await db.link(alice, charlie)
+
+// Bob follows Alice
+await db.link(bob, alice)
+
+// Query who Alice follows
+const { result: aliceNode } = await db.get(alice)
+console.log("Alice follows:", aliceNode.edges)
+```
+
+### Blog Post with Comments
+
+```javascript
+const postId = await db.put({
+  type: "Post",
+  title: "Getting Started with GenosDB",
+  content: "GenosDB is a minimalist graph database..."
+})
+
+// Create comments
+const comment1 = await db.put({
+  type: "Comment",
+  author: "Bob",
+  text: "Great article!"
+})
+
+const comment2 = await db.put({
+  type: "Comment",
+  author: "Alice",
+  text: "Very helpful, thanks!"
+})
+
+// Link comments to post
+await db.link(postId, comment1)
+await db.link(postId, comment2)
+
+// Retrieve post with comments
+const { result: post } = await db.get(postId)
+
+for (const commentId of post.edges) {
+  const { result: comment } = await db.get(commentId)
+  console.log(`${comment.value.author}: ${comment.value.text}`)
+}
+```
+
+### Task Dependencies
+
+```javascript
+const task1 = await db.put({ type: "Task", name: "Design UI" })
+const task2 = await db.put({ type: "Task", name: "Implement Backend" })
+const task3 = await db.put({ type: "Task", name: "Integration Testing" })
+
+// Task 3 depends on tasks 1 and 2
+await db.link(task3, task1)
+await db.link(task3, task2)
+
+// Query dependencies
+const { result: task } = await db.get(task3)
+console.log("Task 3 depends on:", task.edges)
+```
+
+### Product Categories
+
+```javascript
+const electronics = await db.put({ type: "Category", name: "Electronics" })
+const computers = await db.put({ type: "Category", name: "Computers" })
+const laptops = await db.put({ type: "Category", name: "Laptops" })
+
+// Build category hierarchy
+await db.link(electronics, computers)
+await db.link(computers, laptops)
+
+// Add products
+const laptop1 = await db.put({ type: "Product", name: "MacBook Pro" })
+const laptop2 = await db.put({ type: "Product", name: "ThinkPad X1" })
+
+await db.link(laptops, laptop1)
+await db.link(laptops, laptop2)
+
+// Query all laptops using graph traversal
+const { results } = await db.map({
+  query: {
+    type: "Category",
+    name: "Laptops",
+    $edge: {
+      type: "Product"
+    }
+  }
+})
+
+console.log("Laptops:", results)
+```
+
+### Knowledge Graph
+
+```javascript
+const createConcept = async (name, relatedConcepts = []) => {
+  const conceptId = await db.put({
+    type: "Concept",
+    name
+  })
+  
+  for (const relatedId of relatedConcepts) {
+    await db.link(conceptId, relatedId)
+  }
+  
+  return conceptId
+}
+
+const database = await createConcept("Database")
+const graphDb = await createConcept("Graph Database", [database])
+const genosDb = await createConcept("GenosDB", [graphDb])
+```
+
+### Org Chart
+
+```javascript
+const ceo = await db.put({ type: "Employee", name: "CEO", role: "Chief Executive" })
+const cto = await db.put({ type: "Employee", name: "CTO", role: "Chief Technology" })
+const dev1 = await db.put({ type: "Employee", name: "Alice", role: "Developer" })
+const dev2 = await db.put({ type: "Employee", name: "Bob", role: "Developer" })
+
+// Build reporting structure
+await db.link(ceo, cto)
+await db.link(cto, dev1)
+await db.link(cto, dev2)
+
+// Find all employees under CEO
+const { results } = await db.map({
+  query: {
+    name: "CEO",
+    $edge: {
+      type: "Employee"
+    }
+  }
+})
+
+console.log("All employees:", results)
+```
+
+### Batch Linking
+
+```javascript
+const createPostWithTags = async (title, content, tags) => {
+  const postId = await db.put({ type: "Post", title, content })
+  
+  // Link to all tags
+  for (const tag of tags) {
+    const tagId = await db.put(
+      { type: "Tag", name: tag },
+      `tag:${tag}`
+    )
+    await db.link(postId, tagId)
+  }
+  
+  return postId
+}
+
+await createPostWithTags(
+  "P2P Databases",
+  "Exploring decentralized data...",
+  ["p2p", "database", "decentralization"]
+)
+```
+
+## Graph Traversal
+
+Links enable powerful graph queries using the `$edge` operator:
+
+```javascript
+// Find all descendants of a node
+const { results } = await db.map({
+  query: {
+    id: rootId,
+    $edge: {}  // All descendants
+  }
+})
+
+// Find specific descendants
+const { results } = await db.map({
+  query: {
+    id: folderId,
+    $edge: {
+      type: "File",
+      extension: "pdf"
+    }
+  }
+})
+```
+
+## Retrieving Links
+
+Links are stored in the `edges` array of each node:
+
+```javascript
+const { result: node } = await db.get(sourceId)
+
+console.log("Connected nodes:", node.edges)
+// Output: ["targetId1", "targetId2", ...]
+```
+
+## Behavior Notes
+
+<Info>
+**Directed Edges**: Links are directional. `link(A, B)` creates an edge from A to B, but not from B to A.
+</Info>
+
+<Warning>
+**Duplicate Links**: Creating the same link multiple times is safe - GenosDB prevents duplicate edges.
+</Warning>
+
+<Tip>
+**Bidirectional Relationships**: For bidirectional relationships, create two links:
+
+```javascript
+await db.link(nodeA, nodeB)  // A -> B
+await db.link(nodeB, nodeA)  // B -> A
+```
+</Tip>
+
+## P2P Synchronization
+
+When `rtc: true` is enabled, link operations are automatically synchronized across all connected peers:
+
+```javascript
+// Peer A creates a link
+await db.link(userId, postId)
+
+// Peer B immediately sees the relationship
+const { result } = await db.get(userId)
+console.log(result.edges)  // Includes postId
+```
+
+## Related Methods
+
+- [put()](/api/put) - Create nodes to link
+- [get()](/api/get) - View node edges
+- [remove()](/api/remove) - Delete nodes (also removes associated links)
+- [Graph Traversal Operator](/api/operators/graph-traversal) - $edge queries

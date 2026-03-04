@@ -1,0 +1,638 @@
+---
+title: Query System
+description: Master GenosDB's powerful query operators, filtering, sorting, and pagination for advanced data retrieval
+---
+
+## Overview
+
+GenosDB provides a MongoDB-style query language with advanced operators for filtering, text search, pattern matching, and logical combinations. The `map()` method is your primary tool for querying data.
+
+## Basic Query Structure
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('my-app')
+
+const { results } = await db.map({
+  query: { /* filter conditions */ },
+  field: 'fieldName',  // Sort by this field
+  order: 'asc',        // or 'desc'
+  $limit: 10           // Maximum results
+})
+```
+
+## Comparison Operators
+
+### Equality: `$eq`
+
+```javascript
+// Find users named "Alice"
+const { results } = await db.map({
+  query: { name: { $eq: 'Alice' } }
+})
+
+// Shorthand (implicit $eq)
+const { results } = await db.map({
+  query: { name: 'Alice' }
+})
+```
+
+### Inequality: `$ne`
+
+```javascript
+// Find all posts except drafts
+const { results } = await db.map({
+  query: { status: { $ne: 'draft' } }
+})
+```
+
+### Greater Than: `$gt` and `$gte`
+
+```javascript
+// Users older than 18
+const { results } = await db.map({
+  query: { age: { $gt: 18 } }
+})
+
+// Users 18 or older
+const { results } = await db.map({
+  query: { age: { $gte: 18 } }
+})
+```
+
+### Less Than: `$lt` and `$lte`
+
+```javascript
+// Products under $50
+const { results } = await db.map({
+  query: { price: { $lt: 50 } }
+})
+
+// Products $50 or less
+const { results } = await db.map({
+  query: { price: { $lte: 50 } }
+})
+```
+
+### Range: `$between`
+
+```javascript
+// Users between 18 and 30 years old
+const { results } = await db.map({
+  query: { age: { $between: [18, 30] } }
+})
+
+// Posts from last week
+const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+const now = new Date().toISOString()
+
+const { results } = await db.map({
+  query: { 
+    createdAt: { $between: [weekAgo, now] } 
+  }
+})
+```
+
+<Tip>
+`$between` works with numbers, dates (ISO strings), and any comparable values.
+</Tip>
+
+### In Array: `$in`
+
+```javascript
+// Users with specific statuses
+const { results } = await db.map({
+  query: { 
+    status: { $in: ['active', 'pending', 'verified'] } 
+  }
+})
+
+// Multiple ID lookup
+const { results } = await db.map({
+  query: {
+    id: { $in: ['user1', 'user2', 'user3'] }
+  }
+})
+```
+
+### Field Existence: `$exists`
+
+```javascript
+// Nodes with an email field
+const { results } = await db.map({
+  query: { email: { $exists: true } }
+})
+
+// Nodes without a deleted field
+const { results } = await db.map({
+  query: { deleted: { $exists: false } }
+})
+```
+
+## Text Search Operators
+
+### Full-Text Search: `$text`
+
+```javascript
+// Search across all fields (case-insensitive, diacritic-normalized)
+const { results } = await db.map({
+  query: { $text: 'alice' }
+})
+
+// Search specific field
+const { results } = await db.map({
+  query: { 
+    name: { $text: 'alice' } 
+  }
+})
+
+// Search nested fields
+const { results } = await db.map({
+  query: {
+    'profile.bio': { $text: 'developer' }
+  }
+})
+```
+
+<Info>
+`$text` performs case-insensitive, diacritic-normalized searching. "ali" matches "Alice", "Éric" matches "eric".
+</Info>
+
+### Pattern Matching: `$like`
+
+SQL-style pattern matching with wildcards:
+
+```javascript
+// Names starting with 'J'
+const { results } = await db.map({
+  query: { name: { $like: 'J%' } }
+})
+
+// Names ending with 'son'
+const { results } = await db.map({
+  query: { name: { $like: '%son' } }
+})
+
+// Names containing 'and'
+const { results } = await db.map({
+  query: { name: { $like: '%and%' } }
+})
+```
+
+<CardGroup cols={2}>
+  <Card title="%" icon="percent">
+    Matches any sequence of characters
+    
+    `'J%'` → John, Jane, James
+  </Card>
+  
+  <Card title="_" icon="underscore">
+    Matches exactly one character
+    
+    `'J_n'` → Jan, Jon (not John)
+  </Card>
+</CardGroup>
+
+### Regular Expressions: `$regex`
+
+```javascript
+// Names starting with J (regex)
+const { results } = await db.map({
+  query: { name: { $regex: '^J' } }
+})
+
+// Email validation
+const { results } = await db.map({
+  query: {
+    email: { $regex: '^[^@]+@[^@]+\\.[^@]+$' }
+  }
+})
+
+// Phone numbers (US format)
+const { results } = await db.map({
+  query: {
+    phone: { $regex: '^\\d{3}-\\d{3}-\\d{4}$' }
+  }
+})
+```
+
+<Warning>
+Remember to escape backslashes in regex patterns: `\\d` not `\d`.
+</Warning>
+
+## Logical Operators
+
+### AND: `$and`
+
+```javascript
+// Users who are active AND over 18
+const { results } = await db.map({
+  query: {
+    $and: [
+      { status: 'active' },
+      { age: { $gt: 18 } }
+    ]
+  }
+})
+
+// Implicit AND (multiple conditions at root level)
+const { results } = await db.map({
+  query: {
+    status: 'active',
+    age: { $gt: 18 }
+  }
+})
+```
+
+### OR: `$or`
+
+```javascript
+// Users who are admins OR moderators
+const { results } = await db.map({
+  query: {
+    $or: [
+      { role: 'admin' },
+      { role: 'moderator' }
+    ]
+  }
+})
+
+// Complex OR conditions
+const { results } = await db.map({
+  query: {
+    $or: [
+      { age: { $lt: 18 } },
+      { age: { $gt: 65 } },
+      { status: 'vip' }
+    ]
+  }
+})
+```
+
+### NOT: `$not`
+
+```javascript
+// Users NOT over 18
+const { results } = await db.map({
+  query: {
+    $not: { age: { $gt: 18 } }
+  }
+})
+
+// Combining NOT with other operators
+const { results } = await db.map({
+  query: {
+    status: 'active',
+    $not: { role: 'guest' }
+  }
+})
+```
+
+### Complex Logical Combinations
+
+```javascript
+// (Active OR Pending) AND (Age > 18) AND NOT (Role = guest)
+const { results } = await db.map({
+  query: {
+    $and: [
+      {
+        $or: [
+          { status: 'active' },
+          { status: 'pending' }
+        ]
+      },
+      { age: { $gt: 18 } },
+      { $not: { role: 'guest' } }
+    ]
+  }
+})
+```
+
+## Nested Field Queries
+
+Use dot notation to query nested properties:
+
+```javascript
+// User with nested profile
+await db.put({
+  name: 'Alice',
+  profile: {
+    bio: 'Software engineer',
+    location: {
+      city: 'San Francisco',
+      country: 'USA'
+    }
+  }
+}, 'user:alice')
+
+// Query nested fields
+const { results } = await db.map({
+  query: {
+    'profile.location.city': 'San Francisco'
+  }
+})
+
+// With operators
+const { results } = await db.map({
+  query: {
+    'profile.bio': { $text: 'engineer' }
+  }
+})
+```
+
+## Sorting Results
+
+### Basic Sorting
+
+```javascript
+// Sort by age (ascending)
+const { results } = await db.map({
+  query: { type: 'user' },
+  field: 'age',
+  order: 'asc'
+})
+
+// Sort by name (descending)
+const { results } = await db.map({
+  query: { type: 'user' },
+  field: 'name',
+  order: 'desc'
+})
+```
+
+### Sorting Nested Fields
+
+```javascript
+const { results } = await db.map({
+  query: { type: 'user' },
+  field: 'profile.location.city',
+  order: 'asc'
+})
+```
+
+### Default Sorting
+
+If no `field` is specified, results are returned in insertion order:
+
+```javascript
+// Insertion order (oldest first)
+const { results } = await db.map({
+  query: { type: 'post' }
+})
+```
+
+## Pagination
+
+GenosDB supports cursor-based pagination for efficient traversal of large datasets.
+
+### Limit Results: `$limit`
+
+```javascript
+// Get first 10 users
+const { results } = await db.map({
+  query: { type: 'user' },
+  $limit: 10
+})
+```
+
+### Forward Pagination: `$after`
+
+```javascript
+// First page
+const page1 = await db.map({
+  query: { type: 'post' },
+  field: 'createdAt',
+  order: 'desc',
+  $limit: 10
+})
+
+// Get last ID from page 1
+const lastId = page1.results[page1.results.length - 1].id
+
+// Second page
+const page2 = await db.map({
+  query: { type: 'post' },
+  field: 'createdAt',
+  order: 'desc',
+  $limit: 10,
+  $after: lastId  // Start after last ID from page 1
+})
+```
+
+### Backward Pagination: `$before`
+
+```javascript
+// Get 10 posts before a specific ID
+const { results } = await db.map({
+  query: { type: 'post' },
+  field: 'createdAt',
+  order: 'desc',
+  $limit: 10,
+  $before: 'post:123'
+})
+```
+
+### Complete Pagination Example
+
+```javascript
+let currentCursor = null
+const cursors = []  // Stack for backward navigation
+
+function nextPage() {
+  const { results } = await db.map({
+    query: { type: 'post' },
+    field: 'createdAt',
+    order: 'desc',
+    $limit: 15,
+    $after: currentCursor
+  })
+  
+  if (results.length > 0) {
+    cursors.push(currentCursor)  // Save for backward navigation
+    currentCursor = results[results.length - 1].id
+    displayPosts(results)
+  }
+}
+
+function previousPage() {
+  if (cursors.length > 0) {
+    currentCursor = cursors.pop()
+    const { results } = await db.map({
+      query: { type: 'post' },
+      field: 'createdAt',
+      order: 'desc',
+      $limit: 15,
+      $after: currentCursor
+    })
+    displayPosts(results)
+  }
+}
+```
+
+<Tip>
+Cursor-based pagination is more efficient than offset-based for large datasets and remains stable when data changes.
+</Tip>
+
+## Query Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Use Specific Queries" icon="bullseye">
+    Narrow queries return faster:
+    
+    ```javascript
+    // Good
+    { type: 'user', status: 'active' }
+    
+    // Slower
+    { type: 'user' }
+    ```
+  </Card>
+  
+  <Card title="Limit Results" icon="filter">
+    Always use `$limit` for large datasets:
+    
+    ```javascript
+    { query: {...}, $limit: 50 }
+    ```
+  </Card>
+  
+  <Card title="Index with Radix Module" icon="magnifying-glass">
+    Enable the Radix indexer for prefix searches:
+    
+    ```javascript
+    const db = await gdb('app', { rx: true })
+    ```
+  </Card>
+  
+  <Card title="Avoid $regex in Hot Paths" icon="tachometer-alt">
+    Regex is powerful but slower than simple equality.
+  </Card>
+</CardGroup>
+
+## Complete Query Examples
+
+### E-Commerce Product Search
+
+```javascript
+// Find affordable laptops in stock
+const { results } = await db.map({
+  query: {
+    $and: [
+      { category: 'electronics' },
+      { type: 'laptop' },
+      { price: { $between: [500, 1500] } },
+      { inStock: true },
+      {
+        $or: [
+          { brand: 'Apple' },
+          { brand: 'Dell' },
+          { brand: 'Lenovo' }
+        ]
+      }
+    ]
+  },
+  field: 'price',
+  order: 'asc',
+  $limit: 20
+})
+```
+
+### Social Network User Search
+
+```javascript
+// Find active users from San Francisco who are developers
+const { results } = await db.map({
+  query: {
+    status: 'active',
+    'profile.location.city': 'San Francisco',
+    'profile.occupation': { $text: 'developer' },
+    age: { $gte: 18 },
+    email: { $exists: true }
+  },
+  field: 'profile.name',
+  order: 'asc',
+  $limit: 50
+})
+```
+
+### Blog Post Filtering
+
+```javascript
+// Recent published posts with specific tags
+const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+const { results } = await db.map({
+  query: {
+    type: 'post',
+    status: 'published',
+    publishedAt: { $gt: oneMonthAgo },
+    $or: [
+      { tags: { $in: ['javascript', 'react', 'vue'] } },
+      { title: { $text: 'tutorial' } }
+    ],
+    deleted: { $ne: true }
+  },
+  field: 'publishedAt',
+  order: 'desc',
+  $limit: 10
+})
+```
+
+## Query All Nodes
+
+```javascript
+// Get everything (use with caution on large databases)
+const { results } = await db.map({
+  query: {}  // Empty query matches all nodes
+})
+
+// Better: Use limit
+const { results } = await db.map({
+  query: {},
+  $limit: 100
+})
+```
+
+<Warning>
+Querying all nodes without a limit can be slow on large databases. Always use `$limit` for production applications.
+</Warning>
+
+## Inverted Index Module
+
+For enhanced text search performance, enable the Inverted Index module:
+
+```javascript
+const db = await gdb('my-app', {
+  ii: true  // Enable inverted index
+})
+
+// Now $text searches are significantly faster
+const { results } = await db.map({
+  query: { $text: 'search term' }
+})
+```
+
+<Info>
+The Inverted Index module builds reverse indices for text fields, dramatically improving `$text` search performance on large datasets.
+</Info>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Graph Traversal" icon="diagram-project" href="/guides/graph-traversal">
+    Learn the $edge operator for recursive queries
+  </Card>
+  
+  <Card title="Real-Time Subscriptions" icon="bell" href="/guides/real-time-subscriptions">
+    Make queries reactive with live updates
+  </Card>
+  
+  <Card title="CRUD Operations" icon="database" href="/guides/crud-operations">
+    Understand put, get, and remove operations
+  </Card>
+  
+  <Card title="Search Example" icon="magnifying-glass" href="/examples/overview">
+    See query operators in action
+  </Card>
+</CardGroup>

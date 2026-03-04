@@ -1,0 +1,217 @@
+---
+title: "Roadmap"
+description: "GenosDB's vision, current status, and future plans"
+---
+
+Welcome to the roadmap for **GenosDB**, a decentralized P2P graph database powering modern Web3 applications. This document outlines our vision and next steps.
+
+## Vision
+
+<Card title="Mission" icon="telescope">
+To empower developers to build secure, real-time decentralized applications—from chats and Kanban boards to immersive 3D metaverses—without relying on centralized servers, with a simple API and a focus on security and performance.
+</Card>
+
+## Current Status: Stable Beta
+
+As of today, GenosDB is in a **stable beta phase**, offering a robust set of features for building decentralized applications.
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Graph Database Operations">
+    - Core operations: `put`, `get`, `link`, `map`, `remove`
+    - Recursive graph traversal with `$edge` operator
+    - Real-time subscriptions and reactive queries
+    - [See Documentation](/guides/crud-operations)
+  </Accordion>
+  
+  <Accordion title="GenosRTC: P2P Communication">
+    - Real-time audio, video, and file transfers
+    - Cellular Mesh architecture for horizontal scaling
+    - Nostr-based signaling
+    - Supports 10,000+ simultaneous peers
+    - [See GenosRTC Architecture](/advanced/p2p/genosrtc-architecture)
+  </Accordion>
+  
+  <Accordion title="Advanced Security">
+    - Role-Based Access Control (RBAC)
+    - WebAuthn biometric authentication
+    - Access Control Lists (ACLs) for node-level permissions
+    - Distributed Trust Model solving the trust paradox
+    - [See Security](/advanced/security/rbac)
+  </Accordion>
+  
+  <Accordion title="Intelligent Synchronization">
+    - Delta sync via Operation Log (Oplog)
+    - Compressed payloads (MessagePack + pako)
+    - Full-state fallback for reliability
+    - Signaling over Nostr network
+    - [See Hybrid Delta Protocol](/advanced/hybrid-delta-protocol)
+  </Accordion>
+  
+  <Accordion title="High Performance">
+    - Tens of thousands of writes per second
+    - OPFS-based persistence with tiered fallback
+    - Non-blocking asynchronous architecture
+    - [See Worker Architecture](/advanced/worker-architecture)
+  </Accordion>
+</AccordionGroup>
+
+### Availability
+
+- **Free minified builds** available via [NPM](https://www.npmjs.com/package/genosdb) and CDN
+- Rich collection of [examples and tutorials](https://github.com/estebanrfp/gdb/tree/main/examples)
+- Active [GitHub repository](https://github.com/estebanrfp/gdb)
+
+### Limitations
+
+- API is stable but may undergo minor changes before v1.0
+- Source code is proprietary (builds remain free to use)
+
+## Historical Milestones
+
+Based on our [CHANGELOG](/resources/changelog):
+
+<Steps>
+  <Step title="v0.12.0 (Dec 2025)">
+    Cellular Mesh Overlay for massive horizontal scalability
+  </Step>
+  <Step title="v0.9.8 (Jul 2024)">
+    Instantaneous P2P network startup with hybrid relay management
+  </Step>
+  <Step title="v0.8.0 (Mar 2024)">
+    Unprecedented write performance (50K+ ops/sec)
+  </Step>
+  <Step title="v0.7.0 (Feb 2024)">
+    Migration to async factory function (`await gdb()`)
+  </Step>
+  <Step title="v0.5.0 (Dec 2023)">
+    Recursive graph traversal with `$edge` operator
+  </Step>
+  <Step title="v0.4.0 (Nov 2023)">
+    Intelligent delta synchronization engine
+  </Step>
+</Steps>
+
+## Roadmap
+
+### Short Term (Q2 2026)
+
+<CardGroup cols={2}>
+  <Card title="3D Metaverse Demo" icon="cube">
+    Launch public, interactive demo of Babylon.js metaverse powered by GenosDB
+  </Card>
+  <Card title="Technical Deep Dives" icon="book">
+    Publish detailed articles on metaverse architecture and advanced patterns
+  </Card>
+  <Card title="Mobile Optimization" icon="mobile">
+    Further optimize GenosRTC for iOS and Android browsers
+  </Card>
+  <Card title="Documentation Expansion" icon="file-lines">
+    Advanced guides and real-world case studies
+  </Card>
+</CardGroup>
+
+### Mid Term (Q3-Q4 2026)
+
+<CardGroup cols={2}>
+  <Card title="GenosDB v1.0" icon="rocket">
+    Production-ready stable release with frozen API and semantic versioning
+  </Card>
+  <Card title="Community Growth" icon="users">
+    Active engagement through GitHub Discussions and community platforms
+  </Card>
+  <Card title="Enterprise Features" icon="building">
+    Enhanced monitoring, analytics, and deployment tools
+  </Card>
+  <Card title="Developer Tools" icon="wrench">
+    Browser DevTools extension for debugging P2P networks
+  </Card>
+</CardGroup>
+
+### Long Term (2027+)
+
+<CardGroup cols={2}>
+  <Card title="Monetization Models" icon="dollar-sign">
+    Premium support and consulting for enterprise applications
+  </Card>
+  <Card title="Security Audits" icon="shield-halved">
+    Third-party audits for enterprise adoption
+  </Card>
+  <Card title="Dedicated Fallback Nodes" icon="server">
+    Research into optimized cache/fallback infrastructure
+  </Card>
+  <Card title="Ecosystem Expansion" icon="network-wired">
+    SDKs for React Native, Electron, and Node.js native environments
+  </Card>
+</CardGroup>
+
+## Flagship Use Case
+
+<Card title="OVGrid: 3D Metaverse" icon="globe" href="https://ovgrid.com">
+  A fully decentralized 3D metaverse built with **Babylon.js** and **GenosDB**, featuring:
+  - Real-time avatar synchronization
+  - Persistent world state
+  - P2P chat and voice
+  - Object creation and manipulation
+</Card>
+
+## How to Contribute
+
+Although the core source code is proprietary, your contributions are vital:
+
+<AccordionGroup>
+  <Accordion title="Test and Report">
+    Use the builds in your projects and report bugs or issues on [GitHub Issues](https://github.com/estebanrfp/gdb/issues)
+  </Accordion>
+  
+  <Accordion title="Create Demos and Examples">
+    Build applications, demos, or tutorials and share them with the community. [Contribution Guidelines](/resources/contributing)
+  </Accordion>
+  
+  <Accordion title="Share Feedback">
+    Join the conversation in [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions)
+  </Accordion>
+  
+  <Accordion title="Write About GenosDB">
+    If you've built something cool, write about it on Medium, Dev.to, or your blog
+  </Accordion>
+</AccordionGroup>
+
+## Community
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/estebanrfp/gdb/discussions">
+    Ask questions and share ideas
+  </Card>
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/estebanrfp/gdb/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Medium Blog" icon="medium" href="https://medium.com/genosdb">
+    Tutorials and deep dives
+  </Card>
+  <Card title="GenosDB.com" icon="globe" href="https://genosdb.com">
+    Official website and updates
+  </Card>
+</CardGroup>
+
+## Contact
+
+- **Ideas or collaboration?** Reach out via [estebanrfp@gmail.com](mailto:estebanrfp@gmail.com)
+- **Community discussion**: [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions)
+- **Follow updates**: [Medium](https://medium.com/genosdb) and [GenosDB.com](https://genosdb.com)
+
+<Note>
+This roadmap is updated quarterly to reflect progress and shifting priorities. Thank you for your interest and support!
+</Note>
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Changelog" icon="list-check" href="/resources/changelog">
+    Release history and updates
+  </Card>
+  <Card title="Contributing" icon="handshake" href="/resources/contributing">
+    How to contribute to GenosDB
+  </Card>
+</CardGroup>

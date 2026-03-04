@@ -1,0 +1,242 @@
+---
+title: 'put() - Insert or Update Nodes'
+description: 'Store data in GenosDB with automatic synchronization'
+---
+
+## Overview
+
+The `put()` method inserts or updates a node in the database. All data is automatically synchronized across connected peers in real-time when P2P is enabled.
+
+## Signature
+
+```typescript
+await db.put(value: object, id?: string): Promise<string>
+```
+
+## Parameters
+
+<ParamField path="value" type="object" required>
+  Node content to store. Must be JSON-serializable.
+</ParamField>
+
+<ParamField path="id" type="string">
+  Optional node ID. If provided, updates the existing node. If omitted, a new ID is auto-generated using content-based hashing.
+</ParamField>
+
+## Return Value
+
+<ResponseField name="id" type="string">
+  The node ID (either the provided custom ID or the auto-generated hash).
+</ResponseField>
+
+## Examples
+
+### Basic Insert
+
+```javascript
+const id = await db.put({ 
+  type: "User", 
+  name: "Ana" 
+})
+
+console.log("Created node:", id)
+// Output: "b4fae9c3..." (content-based hash)
+```
+
+### Update Existing Node
+
+```javascript
+// First, create a node
+const userId = await db.put({ 
+  type: "User", 
+  name: "Ana" 
+})
+
+// Then update it
+await db.put({ 
+  type: "User", 
+  name: "Ana B" 
+}, userId)
+
+console.log("Updated node:", userId)
+```
+
+### Custom ID
+
+```javascript
+// Use a custom, meaningful ID
+await db.put(
+  { 
+    type: "User", 
+    email: "ana@example.com",
+    name: "Ana" 
+  }, 
+  "user:ana"
+)
+
+// Easy retrieval with known ID
+const { result } = await db.get("user:ana")
+```
+
+### Complex Data Structures
+
+```javascript
+await db.put({
+  type: "Product",
+  name: "Laptop",
+  price: 999.99,
+  specs: {
+    cpu: "Intel i7",
+    ram: "16GB",
+    storage: "512GB SSD"
+  },
+  tags: ["electronics", "computers", "laptops"],
+  available: true
+})
+```
+
+### Building Hierarchical Data
+
+```javascript
+// Create a folder
+const folderId = await db.put({
+  type: "Folder",
+  name: "Documents"
+})
+
+// Create files in the folder
+const fileId1 = await db.put({
+  type: "File",
+  name: "report.pdf",
+  size: 1024
+})
+
+const fileId2 = await db.put({
+  type: "File",
+  name: "presentation.pptx",
+  size: 2048
+})
+
+// Link files to folder
+await db.link(folderId, fileId1)
+await db.link(folderId, fileId2)
+```
+
+### Storing User Profiles
+
+```javascript
+const createUser = async (userData) => {
+  const userId = await db.put({
+    type: "User",
+    ...userData,
+    createdAt: Date.now()
+  })
+  
+  console.log("User created:", userId)
+  return userId
+}
+
+await createUser({
+  username: "alice_123",
+  email: "alice@example.com",
+  bio: "Software developer",
+  tags: ["javascript", "react", "nodejs"]
+})
+```
+
+### Batch Operations
+
+```javascript
+// Insert multiple related nodes
+const createPost = async (title, content, tags) => {
+  const postId = await db.put({
+    type: "Post",
+    title,
+    content,
+    tags,
+    createdAt: Date.now(),
+    likes: 0
+  })
+  
+  // Create tag nodes and link them
+  for (const tag of tags) {
+    const tagId = await db.put({
+      type: "Tag",
+      name: tag
+    }, `tag:${tag}`)
+    
+    await db.link(postId, tagId)
+  }
+  
+  return postId
+}
+
+await createPost(
+  "Getting Started with GenosDB",
+  "GenosDB is a minimalist graph database...",
+  ["database", "p2p", "tutorial"]
+)
+```
+
+### Timestamped Updates
+
+```javascript
+const updateStatus = async (userId, status) => {
+  const { result: user } = await db.get(userId)
+  
+  await db.put({
+    ...user.value,
+    status,
+    lastUpdated: Date.now()
+  }, userId)
+}
+
+await updateStatus("user:ana", "online")
+```
+
+## Behavior Notes
+
+<Info>
+**Content-Based IDs**: When no ID is provided, GenosDB generates a deterministic hash based on the content. Identical values will produce the same ID.
+</Info>
+
+<Warning>
+**Automatic Merging**: If you update a node while offline and other peers also update it, GenosDB uses Hybrid Logical Clock (HLC) timestamps to merge changes. The most recent update wins.
+</Warning>
+
+<Tip>
+**Custom vs Auto IDs**: Use custom IDs when you need predictable references (e.g., `user:email`). Use auto-generated IDs for content where the ID isn't semantically meaningful.
+</Tip>
+
+## P2P Synchronization
+
+When `rtc: true` is enabled:
+
+1. **Local Write**: The `put()` operation writes to local storage immediately
+2. **Broadcast**: The operation is signed (if Security Manager is enabled) and broadcast to all connected peers
+3. **Peer Apply**: Each peer validates and applies the operation to their local database
+4. **Conflict Resolution**: HLC timestamps ensure deterministic conflict resolution
+
+```javascript
+// Peer A
+const db = await gdb("shared-db", { rtc: true })
+await db.put({ type: "Task", text: "Buy milk" }, "task-1")
+
+// Peer B receives the update automatically
+// and can immediately query it
+const { result } = await db.get("task-1")
+console.log(result.value.text) // "Buy milk"
+```
+
+## Performance Considerations
+
+- **Debounced Saves**: Multiple rapid `put()` calls are batched to reduce disk I/O (configurable via `saveDelay` option)
+- **Operation Log**: Recent operations are kept in memory (size controlled by `oplogSize`) for efficient P2P delta sync
+- **Indexing**: If modules like Radix Index (`rx`) or Geo (`geo`) are enabled, indexes are updated automatically
+
+## Related Methods
+
+- [get()](/api/get) - Retrieve nodes by ID
+- [link()](/api/link) - Create relationships
+- [remove()](/api/remove) - Delete nodes
+- [map()](/api/map) - Query multiple nodes

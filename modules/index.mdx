@@ -1,0 +1,183 @@
+---
+title: 'Modules Overview'
+description: 'Extend GenosDB with powerful optional modules'
+---
+
+## Overview
+
+GenosDB offers a modular architecture where you can enable specific features based on your application needs. Each module is loaded dynamically and integrates seamlessly with the core database.
+
+## Available Modules
+
+### Security & Access Control
+
+<CardGroup cols={2}>
+  <Card title="Security Manager (SM)" icon="shield" href="/modules/security-manager">
+    Identity management, RBAC, and P2P security with WebAuthn and mnemonics
+  </Card>
+  <Card title="ACLs" icon="lock" href="/modules/acls">
+    Fine-grained node-level permissions for collaborative applications
+  </Card>
+  <Card title="Audit" icon="gavel" href="/modules/audit">
+    Automated content policy enforcement and moderation
+  </Card>
+</CardGroup>
+
+### Communication & Networking
+
+<CardGroup cols={2}>
+  <Card title="GenosRTC" icon="broadcast-tower" href="/modules/genosrtc">
+    P2P data channels, media streaming, and cellular mesh networking
+  </Card>
+</CardGroup>
+
+### Search & Indexing
+
+<CardGroup cols={2}>
+  <Card title="Radix Tree (rx)" icon="search" href="/modules/radix-tree">
+    High-performance prefix-based search for autocomplete and ID queries
+  </Card>
+  <Card title="Geo" icon="map-marker" href="/modules/geo">
+    Geo-spatial queries with $near and $bbox operators
+  </Card>
+  <Card title="NLQ" icon="comment-dots" href="/modules/nlq">
+    Natural language query translation for user-facing interfaces
+  </Card>
+</CardGroup>
+
+## Enabling Modules
+
+Modules are enabled during database initialization:
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db", {
+  rtc: true,    // Enable P2P communication
+  rx: true,     // Enable Radix Index
+  geo: true,    // Enable Geo-spatial queries
+  nlq: true,    // Enable Natural Language Queries
+  sm: {         // Enable Security Manager
+    superAdmins: ["0x..."],
+    acls: true  // Enable ACLs
+  },
+  audit: {      // Enable Audit
+    prompt: "detect offensive language"
+  }
+})
+```
+
+## Module Comparison
+
+| Module | Use Case | Dependencies | Performance Impact |
+|--------|----------|--------------|--------------------|
+| **Security Manager** | Authentication, RBAC | `rtc: true` | Low |
+| **ACLs** | Node permissions | Security Manager | Low |
+| **Audit** | Content moderation | None | Medium (API calls) |
+| **GenosRTC** | P2P communication | None | Low-Medium |
+| **Radix Tree** | Prefix search | None | Low (memory: ~10-20% of DB size) |
+| **Geo** | Location queries | None | Low |
+| **NLQ** | Natural language | None | Low |
+
+## Choosing Modules
+
+### For Chat Applications
+
+```javascript
+const db = await gdb("chat", {
+  rtc: true,     // Real-time messaging
+  sm: {          // User authentication
+    superAdmins: ["0x..."],
+    acls: true   // Private messages
+  },
+  audit: {       // Content moderation
+    prompt: "detect offensive language"
+  }
+})
+```
+
+### For Location-Based Apps
+
+```javascript
+const db = await gdb("location-app", {
+  rtc: true,     // Real-time location updates
+  geo: true,     // Geo-spatial queries
+  sm: {          // User accounts
+    superAdmins: ["0x..."]
+  }
+})
+```
+
+### For Search Applications
+
+```javascript
+const db = await gdb("search-app", {
+  rx: true,      // Prefix-based autocomplete
+  nlq: true,     // Natural language search
+  geo: true      // Location filters
+})
+```
+
+### For Collaborative Tools
+
+```javascript
+const db = await gdb("collab-tool", {
+  rtc: true,     // Real-time sync
+  sm: {          // User management
+    superAdmins: ["0x..."],
+    acls: true,  // Document permissions
+    customRoles: {
+      editor: { can: ["write"], inherits: ["user"] },
+      viewer: { can: ["read"], inherits: ["guest"] }
+    }
+  }
+})
+```
+
+## Module Loading
+
+<Info>
+**Dynamic Loading**: Modules are loaded on-demand when you enable them. This keeps your application bundle size minimal.
+</Info>
+
+<Warning>
+**Initialization Order**: Some modules have dependencies:
+- **ACLs** requires **Security Manager**
+- **Security Manager** requires **RTC** (`rtc: true`)
+</Warning>
+
+## Performance Tips
+
+<Tip>
+**Enable Only What You Need**: Each module adds features but also overhead. Only enable modules you'll actually use:
+
+```javascript
+// ✅ Minimal - only core features
+const db = await gdb("simple-app")
+
+// ❌ Excessive - all modules enabled unnecessarily
+const db = await gdb("simple-app", {
+  rtc: true, rx: true, geo: true, nlq: true, /* ... */
+})
+```
+</Tip>
+
+<Tip>
+**Module Combinations**: Some modules work great together:
+- **RTC + SM**: Secure P2P communication
+- **RTC + Geo**: Real-time location tracking
+- **rx + NLQ**: Powerful search interface
+- **SM + ACLs + Audit**: Complete security stack
+</Tip>
+
+## Next Steps
+
+Explore each module's documentation for detailed API references and examples:
+
+- [Security Manager](/modules/security-manager) - Authentication and RBAC
+- [ACLs](/modules/acls) - Node-level permissions
+- [GenosRTC](/modules/genosrtc) - P2P communication
+- [Radix Tree](/modules/radix-tree) - Prefix search
+- [Geo](/modules/geo) - Geo-spatial queries
+- [NLQ](/modules/nlq) - Natural language queries
+- [Audit](/modules/audit) - Content moderation

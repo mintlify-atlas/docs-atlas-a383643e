@@ -1,122 +1,150 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "GenosDB",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#040404",
+    "light": "#2563EB",
+    "dark": "#040404"
   },
-  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "https://media.brand.dev/60a97e57-7e54-47a1-9b67-5dca1bd13d9b.svg",
+    "dark": "https://media.brand.dev/60a97e57-7e54-47a1-9b67-5dca1bd13d9b.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/estebanrfp/gdb"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/estebanrfp/gdb"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/graph-database",
+              "concepts/p2p-sync",
+              "concepts/security-model",
+              "concepts/conflict-resolution"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/crud-operations",
+              "guides/queries",
+              "guides/graph-traversal",
+              "guides/real-time-subscriptions",
+              "guides/p2p-setup"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Examples",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "examples/overview",
+              "examples/todo-app",
+              "examples/chat-app",
+              "examples/collaborative-editor"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core API",
             "pages": [
-              "api-reference/introduction"
+              "api/initialization",
+              "api/put",
+              "api/get",
+              "api/map",
+              "api/link",
+              "api/remove"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Query Operators",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/operators/comparison",
+              "api/operators/text-search",
+              "api/operators/graph-traversal",
+              "api/operators/logical"
+            ]
+          },
+          {
+            "group": "Modules",
+            "pages": [
+              "modules/security-manager",
+              "modules/genosrtc",
+              "modules/acls",
+              "modules/radix-tree",
+              "modules/geo",
+              "modules/nlq",
+              "modules/audit"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "advanced/architecture-overview",
+              "advanced/worker-architecture",
+              "advanced/hybrid-delta-protocol",
+              "advanced/hybrid-logical-clock",
+              "advanced/cellular-mesh"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "advanced/security/rbac",
+              "advanced/security/webauthn",
+              "advanced/security/zero-trust",
+              "advanced/security/distributed-trust"
+            ]
+          },
+          {
+            "group": "P2P Networking",
+            "pages": [
+              "advanced/p2p/genosrtc-architecture",
+              "advanced/p2p/nostr-signaling",
+              "advanced/p2p/cells-topology",
+              "advanced/p2p/fallback-server"
+            ]
+          },
+          {
+            "group": "Migration & Resources",
+            "pages": [
+              "resources/migration-guide",
+              "resources/bundler-config",
+              "resources/changelog",
+              "resources/roadmap",
+              "resources/contributing"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

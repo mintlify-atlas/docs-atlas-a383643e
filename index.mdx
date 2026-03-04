@@ -1,97 +1,360 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "GenosDB Documentation"
+description: "Decentralized P2P graph database with real-time synchronization, RBAC security, and offline-first capabilities"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white">
+  {/* Hero Section */}
+  <div className="relative py-20 px-6 sm:px-8 lg:px-12">
+    <div className="max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        {/* Left column - Content */}
+        <div className="lg:col-span-7">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold dark:text-white text-gray-900 mb-6">
+            Build Real-Time Decentralized Apps with GenosDB
+          </h1>
+          <p className="text-base sm:text-lg lg:text-xl dark:text-gray-400 text-gray-600 max-w-2xl mb-8">
+            A lightweight P2P graph database designed for modern web applications. Real-time synchronization, offline-first storage, and enterprise-grade security built right in.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <a 
+              href="/quickstart" 
+              className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-colors bg-[#040404] text-white hover:bg-[#2563EB] no-underline"
+            >
+              Get Started
+            </a>
+            <a 
+              href="/api/initialization" 
+              className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold transition-colors border dark:border-white/30 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 border-gray-300 bg-white text-gray-900 hover:bg-gray-50 no-underline"
+            >
+              API Reference
+            </a>
+          </div>
+        </div>
 
-Get your documentation site up and running in minutes.
+        {/* Right column - Features highlight */}
+        <div className="lg:col-span-5">
+          <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-6 dark:border-[#27272a] border border-gray-200">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold dark:text-white text-gray-900">Real-time P2P Sync</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-600">WebRTC-based peer-to-peer synchronization with Nostr signaling</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold dark:text-white text-gray-900">Enterprise Security</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-600">WebAuthn authentication with RBAC and ACLs</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold dark:text-white text-gray-900">Offline-First</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-600">OPFS storage with automatic conflict resolution</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+{/* Quick Start Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Quick Start</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Get up and running with GenosDB in minutes</p>
+  
+  <Steps>
+    <Step title="Install GenosDB">
+      Install the package via npm, yarn, or pnpm:
+      
+      <CodeGroup>
+      ```bash npm
+      npm install genosdb
+      ```
+      
+      ```bash yarn
+      yarn add genosdb
+      ```
+      
+      ```bash pnpm
+      pnpm add genosdb
+      ```
+      </CodeGroup>
+    </Step>
+    
+    <Step title="Initialize the database">
+      Import and create a new database instance:
+      
+      ```javascript
+      import { gdb } from "genosdb"
+      
+      const db = await gdb("my-app", { rtc: true })
+      ```
+      
+      <Note>Enable `rtc: true` for real-time P2P synchronization across devices and tabs.</Note>
+    </Step>
+    
+    <Step title="Store and query data">
+      Use the graph database API to store nodes and query relationships:
+      
+      ```javascript
+      // Create a node
+      const userId = await db.put({ name: "Alice", role: "developer" })
+      
+      // Query nodes
+      const results = await db.map({ 
+        query: { role: "developer" },
+        $limit: 10 
+      })
+      
+      console.log(results)
+      ```
+    </Step>
+    
+    <Step title="Add P2P sync">
+      Changes automatically sync in real-time across all connected peers:
+      
+      ```javascript
+      // Subscribe to real-time updates
+      db.map({ query: { role: "developer" } }, (data) => {
+        console.log("Live update:", data)
+      })
+      ```
+      
+      <Tip>Open your app in multiple browser tabs to see real-time synchronization in action!</Tip>
+    </Step>
+  </Steps>
+</div>
 
-## Make it yours
+{/* Explore by Topic Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Explore by Topic</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Dive deeper into GenosDB's capabilities</p>
+  
+  <CardGroup cols={2}>
+    <Card title="Core Concepts" icon="book-open" href="/concepts/graph-database">
+      Learn about graph databases, P2P synchronization, and conflict resolution
+    </Card>
+    <Card title="CRUD Operations" icon="pen-to-square" href="/guides/crud-operations">
+      Master put, get, map, link, and remove operations
+    </Card>
+    <Card title="Graph Traversal" icon="diagram-project" href="/guides/graph-traversal">
+      Execute complex multi-hop queries with the $edge operator
+    </Card>
+    <Card title="Security & RBAC" icon="shield-halved" href="/concepts/security-model">
+      Implement role-based access control and WebAuthn authentication
+    </Card>
+    <Card title="Real-time Subscriptions" icon="rss" href="/guides/real-time-subscriptions">
+      Build reactive UIs with live data updates
+    </Card>
+    <Card title="P2P Networking" icon="network-wired" href="/guides/p2p-setup">
+      Configure WebRTC, Nostr relays, and cellular mesh topology
+    </Card>
+  </CardGroup>
+</div>
 
-Design a docs site that looks great and empowers your users.
+{/* Features Grid */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Key Features</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Everything you need to build decentralized applications</p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Blazing Fast</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">Optimized for tens of thousands of operations per second without blocking the UI</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Decentralized</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">True peer-to-peer architecture with no central server dependency</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Modular</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">Optional extensions: Geo queries, NLQ, Radix Tree indexing, ACLs</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Conflict Resolution</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">Hybrid Logical Clock with LWW-CRDT for automatic conflict resolution</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Browser Native</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">Works entirely in the browser with OPFS for local persistence</p>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-xl p-6 dark:border-[#27272a] border border-gray-200">
+      <div className="w-10 h-10 rounded-lg bg-[#2563EB] flex items-center justify-center mb-4">
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-2">Scalable</h3>
+      <p className="text-sm dark:text-gray-400 text-gray-600">Cellular mesh topology supports networks with 100+ peers</p>
+    </div>
+  </div>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+{/* API Modules Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Optional Modules</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Extend GenosDB with powerful add-ons</p>
+  
+  <CardGroup cols={3}>
+    <Card title="Security Manager" icon="shield-halved" href="/modules/security-manager">
+      WebAuthn, RBAC, and cryptographic verification
+    </Card>
+    <Card title="GenosRTC" icon="satellite-dish" href="/modules/genosrtc">
+      P2P networking with WebRTC and Nostr
+    </Card>
+    <Card title="ACLs" icon="lock" href="/modules/acls">
+      Fine-grained node-level permissions
+    </Card>
+    <Card title="Radix Tree" icon="sitemap" href="/modules/radix-tree">
+      Fast prefix searches and autocomplete
+    </Card>
+    <Card title="Geo Queries" icon="location-dot" href="/modules/geo">
+      Spatial queries with $near and $bbox
+    </Card>
+    <Card title="Natural Language" icon="comment-dots" href="/modules/nlq">
+      Query your graph using natural language
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+{/* Resources Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Resources</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Learn more about GenosDB's architecture and design</p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <a href="https://github.com/estebanrfp/gdb/blob/main/WHITEPAPER.md" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden dark:hover:border-[#2563EB] hover:border-[#2563EB] transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Whitepaper</h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Deep dive into GenosDB's architecture, design decisions, and technical implementation</p>
+        <span className="text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#2563EB] group-hover:text-[#2563EB] inline-flex items-center gap-1">
+          Read the whitepaper
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="https://github.com/estebanrfp/gdb/blob/main/PHILOSOPHY.md" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden dark:hover:border-[#2563EB] hover:border-[#2563EB] transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Philosophy</h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Understand the vision, principles, and goals behind GenosDB's development</p>
+        <span className="text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#2563EB] group-hover:text-[#2563EB] inline-flex items-center gap-1">
+          Read the philosophy
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/examples/overview" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden dark:hover:border-[#2563EB] hover:border-[#2563EB] transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Live Examples</h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Interactive demos showing real-world use cases: chat, todo lists, collaborative editing</p>
+        <span className="text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#2563EB] group-hover:text-[#2563EB] inline-flex items-center gap-1">
+          Explore examples
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/resources/roadmap" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden dark:hover:border-[#2563EB] hover:border-[#2563EB] transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Roadmap</h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">See what's coming next: planned features, milestones, and future development</p>
+        <span className="text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#2563EB] group-hover:text-[#2563EB] inline-flex items-center gap-1">
+          View roadmap
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
 
-Everything you need to create world-class documentation.
+{/* Community & Support Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-3">Community & Support</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Get help and connect with other developers</p>
+  
+  <CardGroup cols={2}>
+    <Card title="GitHub Discussions" icon="comments" href="https://github.com/estebanrfp/gdb/discussions">
+      Ask questions, share ideas, and get help from the community
+    </Card>
+    <Card title="Report Issues" icon="bug" href="https://github.com/estebanrfp/gdb/issues">
+      Found a bug or have a feature request? Let us know
+    </Card>
+  </CardGroup>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+{/* CTA Footer */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-8 sm:p-12 dark:border-[#27272a] border border-gray-200 text-center">
+    <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-4">Ready to build decentralized apps?</h2>
+    <p className="text-base dark:text-gray-400 text-gray-600 max-w-2xl mx-auto mb-8">
+      Start building with GenosDB today. Free for personal and commercial use.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center justify-center px-8 py-3 rounded-lg font-semibold transition-colors bg-[#040404] text-white hover:bg-[#2563EB] no-underline"
+    >
+      Get Started Now
+    </a>
+  </div>
+</div>

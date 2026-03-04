@@ -1,0 +1,428 @@
+---
+title: Examples Overview
+description: Explore GenosDB examples from basic todos to collaborative editors, demonstrating real-time P2P synchronization and security features
+---
+
+## Getting Started
+
+GenosDB provides a collection of examples to help you understand its capabilities. From simple todo lists to complex collaborative applications, each example is designed to showcase specific features with working code you can learn from.
+
+<Tip>
+All examples are open-source and available in the [GenosDB repository](https://github.com/estebanrfp/gdb/tree/main/examples).
+</Tip>
+
+## Basic Examples
+
+Perfect for learning GenosDB fundamentals.
+
+<CardGroup cols={2}>
+  <Card title="Todo List" icon="list-check" href="/examples/todo-app">
+    Simple real-time task management with CRUD operations and reactive queries.
+    
+    **Features:**
+    - Real-time sync across tabs and devices
+    - Reactive `map()` subscriptions
+    - Inline editing
+    - Persistent storage
+  </Card>
+  
+  <Card title="Chat Application" icon="comments" href="/examples/chat-app">
+    Minimalist P2P chat in just 9 lines of code.
+    
+    **Features:**
+    - Real-time messaging
+    - No backend server
+    - Cross-device sync
+    - Persistent message history
+  </Card>
+  
+  <Card title="Kanban Board" icon="columns" href="https://estebanrfp.github.io/gdb/examples/kanban.html">
+    Drag-and-drop task board with real-time updates.
+    
+    **Features:**
+    - Multiple status columns
+    - Drag-and-drop
+    - Real-time collaboration
+  </Card>
+  
+  <Card title="Infinite Scroll" icon="arrows-down-to-line" href="https://estebanrfp.github.io/gdb/examples/infinite-scroll.html">
+    Dynamic content loading with cursor-based pagination.
+    
+    **Features:**
+    - Efficient pagination
+    - Lazy loading
+    - Smooth scrolling
+  </Card>
+</CardGroup>
+
+## Collaborative Applications
+
+Advanced examples showcasing real-time collaboration.
+
+<CardGroup cols={2}>
+  <Card title="Collaborative Editor" icon="file-pen" href="/examples/collaborative-editor">
+    Rich-text editor with live cursors, version history, and video chat.
+    
+    **Features:**
+    - Real-time typing sync
+    - Remote cursor positions
+    - Markdown/HTML preview
+    - Version history
+    - Integrated video room
+    - RBAC + WebAuthn
+  </Card>
+  
+  <Card title="Whiteboard" icon="paintbrush" href="https://estebanrfp.github.io/gdb/examples/whiteboard.html">
+    P2P collaborative canvas for drawing.
+    
+    **Features:**
+    - Real-time drawing sync
+    - Multiple users
+    - No backend
+  </Card>
+  
+  <Card title="Shared Notes" icon="note-sticky" href="https://estebanrfp.github.io/gdb/examples/notesdev.html">
+    Secure, decentralized note-taking with ACLs.
+    
+    **Features:**
+    - End-to-end encryption
+    - Granular permissions
+    - Full-text search
+    - Light/dark mode
+  </Card>
+  
+  <Card title="Location Sharing" icon="map-location-dot" href="https://estebanrfp.github.io/gdb/examples/share-locations.html">
+    Real-time GPS tracking on an interactive map.
+    
+    **Features:**
+    - Live location updates
+    - Leaflet map integration
+    - Path history
+    - Multiple users
+  </Card>
+</CardGroup>
+
+## Media & Streaming
+
+Examples using GenosRTC for audio/video streaming.
+
+<CardGroup cols={2}>
+  <Card title="Audio Room" icon="microphone" href="https://estebanrfp.github.io/gdb/examples/audio-streaming.html">
+    P2P voice chat with voice activity detection.
+    
+    **Features:**
+    - Real-time audio streaming
+    - Automatic peer discovery
+    - Voice activity indicator
+  </Card>
+  
+  <Card title="Video Conference" icon="video" href="https://estebanrfp.github.io/gdb/examples/video-streaming.html">
+    Multi-peer video conferencing.
+    
+    **Features:**
+    - WebRTC video streaming
+    - Automatic layout
+    - Screen sharing support
+  </Card>
+  
+  <Card title="File Sharing" icon="file-arrow-up" href="https://estebanrfp.github.io/gdb/examples/file-streaming.html">
+    P2P file transfer with progress tracking.
+    
+    **Features:**
+    - Direct file transfer
+    - No file size limits
+    - Encrypted transfer
+  </Card>
+</CardGroup>
+
+## Security Examples
+
+Demonstrations of GenosDB's Security Manager.
+
+<CardGroup cols={2}>
+  <Card title="RBAC Chat" icon="shield-halved" href="https://estebanrfp.github.io/gdb/examples/chatrbac.html">
+    Chat with role-based access control.
+    
+    **Features:**
+    - WebAuthn authentication
+    - Role hierarchy
+    - Permission enforcement
+  </Card>
+  
+  <Card title="Auth UX Demo" icon="fingerprint" href="https://estebanrfp.github.io/gdb/examples/sm-auth-demo.html">
+    Best-practice authentication flow.
+    
+    **Features:**
+    - Mnemonic registration
+    - WebAuthn passkeys
+    - Secure session management
+  </Card>
+  
+  <Card title="Encryption Demo" icon="lock" href="https://estebanrfp.github.io/gdb/examples/encryption.html">
+    End-to-end data encryption.
+    
+    **Features:**
+    - Client-side encryption
+    - User-specific keys
+    - Secure storage
+  </Card>
+  
+  <Card title="SM Testbed" icon="vial" href="https://estebanrfp.github.io/gdb/examples/sm-testbed.html">
+    Complete Security Manager testing environment.
+    
+    **Features:**
+    - Full RBAC implementation
+    - WebAuthn flows
+    - Role assignment
+  </Card>
+</CardGroup>
+
+## Advanced Features
+
+Showcasing GenosDB's powerful capabilities.
+
+<CardGroup cols={2}>
+  <Card title="Graph Queries" icon="diagram-project" href="https://estebanrfp.github.io/gdb/examples/edges.html">
+    Recursive graph traversal with `$edge` operator.
+    
+    **Features:**
+    - Multi-hop queries
+    - Relationship discovery
+    - Visual graph display
+  </Card>
+  
+  <Card title="Search Demo" icon="magnifying-glass" href="https://estebanrfp.github.io/gdb/examples/search.html">
+    Full-text search with query operators.
+    
+    **Features:**
+    - Text search
+    - Regex patterns
+    - Multiple filters
+  </Card>
+  
+  <Card title="Pagination" icon="table-list" href="https://estebanrfp.github.io/gdb/examples/pagination.html">
+    Cursor-based pagination for large datasets.
+    
+    **Features:**
+    - Forward/backward navigation
+    - Persistent cursors
+    - Efficient queries
+  </Card>
+  
+  <Card title="Custom Cursors" icon="arrow-pointer" href="https://estebanrfp.github.io/gdb/examples/cursor.html">
+    Real-time cursor synchronization.
+    
+    **Features:**
+    - Live cursor positions
+    - Data channels
+    - Smooth animation
+  </Card>
+</CardGroup>
+
+## Visualization & Monitoring
+
+Tools for visualizing GenosDB's internals.
+
+<CardGroup cols={2}>
+  <Card title="Mesh Monitor (D3)" icon="network-wired" href="https://estebanrfp.github.io/gdb/examples/mesh-cells-monitor-d3.html">
+    D3.js visualization of cellular mesh topology.
+    
+    **Features:**
+    - Real-time topology
+    - Bridge connections
+    - Network metrics
+  </Card>
+  
+  <Card title="Mesh Monitor (3D)" icon="cube" href="https://estebanrfp.github.io/gdb/examples/mesh-cells-monitor-particles.html">
+    Three.js 3D visualization of mesh network.
+    
+    **Features:**
+    - 3D cell geometries
+    - Animated particles
+    - Interactive camera
+  </Card>
+  
+  <Card title="Performance Test" icon="gauge-high" href="https://estebanrfp.github.io/gdb/examples/perf-stress-test.html">
+    Benchmark GenosDB under load.
+    
+    **Features:**
+    - Mass insertions
+    - Sync performance
+    - Latency testing
+  </Card>
+  
+  <Card title="Graph Relations" icon="diagram-next" href="https://estebanrfp.github.io/gdb/examples/relations.html">
+    Visualize node relationships.
+    
+    **Features:**
+    - Real-time graph
+    - Link visualization
+    - Interactive nodes
+  </Card>
+</CardGroup>
+
+## Community Projects
+
+Open-source projects built with GenosDB.
+
+<CardGroup cols={2}>
+  <Card title="dKanban" icon="columns" href="https://github.com/estebanrfp/dKanban">
+    Full-featured Kanban board application.
+    
+    **GitHub:** estebanrfp/dKanban
+  </Card>
+  
+  <Card title="dChat" icon="comments" href="https://github.com/estebanrfp/dChat">
+    Complete chat application.
+    
+    **GitHub:** estebanrfp/dChat
+  </Card>
+  
+  <Card title="dCMS" icon="file-lines" href="https://github.com/estebanrfp/dCMS">
+    Distributed content management system.
+    
+    **GitHub:** estebanrfp/dCMS
+  </Card>
+  
+  <Card title="Pixel Painting" icon="palette" href="https://github.com/estebanrfp/Pixel-Painting">
+    Collaborative pixel art canvas.
+    
+    **GitHub:** estebanrfp/Pixel-Painting
+  </Card>
+</CardGroup>
+
+## Running Examples Locally
+
+Clone the repository and open examples in your browser:
+
+```bash
+# Clone the repository
+git clone https://github.com/estebanrfp/gdb.git
+cd gdb/examples
+
+# Serve with any static server
+npx http-server -p 8080
+
+# Open in browser
+open http://localhost:8080/todolist.html
+```
+
+<Warning>
+Some examples require HTTPS for WebAuthn features. Use a local HTTPS server or deploy to a hosting service.
+</Warning>
+
+## Example Categories
+
+### By Difficulty
+
+- **Beginner:** Todo List, Chat, Kanban
+- **Intermediate:** Whiteboard, Audio/Video Streaming, Search
+- **Advanced:** Collaborative Editor, Shared Notes, Mesh Monitors
+
+### By Feature
+
+- **Real-Time Sync:** Todo List, Chat, Kanban, Whiteboard
+- **Security:** RBAC Chat, Auth Demo, Encryption, SM Testbed
+- **Media:** Audio Room, Video Conference, File Sharing
+- **Queries:** Search, Pagination, Graph Queries
+- **P2P:** All examples with `rtc: true`
+
+### By Use Case
+
+- **Productivity:** Todo List, Kanban, Collaborative Editor, Shared Notes
+- **Communication:** Chat, Audio Room, Video Conference
+- **Visualization:** Mesh Monitors, Graph Relations
+- **Testing:** Performance Test, SM Testbed, Edge Operator Testbed
+
+## Learn by Doing
+
+The best way to learn GenosDB is to:
+
+<Steps>
+  <Step title="Start Simple">
+    Begin with the [Todo App](/examples/todo-app) to understand CRUD operations and real-time queries.
+  </Step>
+  
+  <Step title="Add P2P">
+    Explore the [Chat App](/examples/chat-app) to see how P2P synchronization works.
+  </Step>
+  
+  <Step title="Secure Your App">
+    Study the RBAC Chat example to implement authentication and permissions.
+  </Step>
+  
+  <Step title="Build Advanced Features">
+    Dive into the [Collaborative Editor](/examples/collaborative-editor) for a complete application.
+  </Step>
+</Steps>
+
+## Example Code Patterns
+
+### Real-Time Todo Pattern
+
+```javascript
+const db = await gdb('todos', { rtc: true })
+
+// Subscribe to updates
+await db.map(
+  { query: { type: 'todo' } },
+  ({ id, value, action }) => {
+    if (action === 'added') addTodoToUI(id, value)
+    if (action === 'updated') updateTodoInUI(id, value)
+    if (action === 'removed') removeTodoFromUI(id)
+  }
+)
+
+// Add todo
+await db.put({ type: 'todo', text: 'Buy milk', completed: false })
+```
+
+### P2P Chat Pattern
+
+```javascript
+const db = await gdb('chat', { rtc: true })
+
+// Listen for messages
+await db.map(({ value }) => {
+  displayMessage(value.user, value.text)
+})
+
+// Send message
+await db.put({ user: 'Alice', text: 'Hello!' })
+```
+
+### Secure Auth Pattern
+
+```javascript
+const db = await gdb('secure-app', {
+  rtc: true,
+  sm: { superAdmins: ['0x1234...'] }
+})
+
+// Register
+const { mnemonic } = await db.sm.startNewUserRegistration()
+await db.sm.protectCurrentIdentityWithWebAuthn('alice@example.com')
+
+// Login
+await db.sm.loginCurrentUserWithWebAuthn()
+```
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="/introduction">
+    Read the full GenosDB documentation
+  </Card>
+  
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/estebanrfp/gdb/discussions">
+    Ask questions and share ideas
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/initialization">
+    Explore the complete API
+  </Card>
+  
+  <Card title="Report Issues" icon="bug" href="https://github.com/estebanrfp/gdb/issues">
+    Found a bug? Let us know
+  </Card>
+</CardGroup>

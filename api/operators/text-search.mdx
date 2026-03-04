@@ -1,0 +1,407 @@
+---
+title: 'Text Search Operator'
+description: 'Full-text search capabilities with the $text operator'
+---
+
+## Overview
+
+The `$text` operator enables full-text search across node fields, supporting pattern matching, case-insensitive searches, and regular expressions.
+
+<Note>
+For advanced text search capabilities with indexing, enable the Inverted Index module (`ii: true`) during database initialization.
+</Note>
+
+## Basic Text Search
+
+### Simple Text Match
+
+```javascript
+// Find nodes containing "javascript"
+const { results } = await db.map({
+  query: {
+    name: { $text: "javascript" }
+  }
+})
+```
+
+### Case-Insensitive Search
+
+```javascript
+// Search is case-insensitive by default
+const { results } = await db.map({
+  query: {
+    type: "Post",
+    title: { $text: "genosdb" }  // Matches "GenosDB", "genosdb", "GENOSDB"
+  }
+})
+```
+
+## Pattern Matching with $regex
+
+### Starts With
+
+```javascript
+// Names starting with "Ana"
+const { results } = await db.map({
+  query: {
+    name: { $regex: "^Ana" }
+  }
+})
+```
+
+### Ends With
+
+```javascript
+// Emails ending with "@example.com"
+const { results } = await db.map({
+  query: {
+    email: { $regex: "@example\.com$" }
+  }
+})
+```
+
+### Contains Pattern
+
+```javascript
+// Descriptions containing "database" or "graph"
+const { results } = await db.map({
+  query: {
+    description: { $regex: "(database|graph)" }
+  }
+})
+```
+
+### Wildcard Matching with $like
+
+```javascript
+// Names like "J%" (starts with J)
+const { results } = await db.map({
+  query: {
+    name: { $like: "J%" }
+  }
+})
+
+// Files ending with .pdf
+const { results } = await db.map({
+  query: {
+    filename: { $like: "%.pdf" }
+  }
+})
+```
+
+## Examples
+
+### Search User Names
+
+```javascript
+const searchUsers = async (searchTerm) => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      name: { $regex: searchTerm }
+    },
+    field: "name",
+    order: "asc"
+  })
+  
+  return results
+}
+
+const users = await searchUsers("ana")
+console.log(`Found ${users.length} users matching "ana"`)
+```
+
+### Multi-Field Text Search
+
+```javascript
+// Search across multiple fields
+const searchPosts = async (query) => {
+  const { results } = await db.map({
+    query: {
+      type: "Post",
+      $or: [
+        { title: { $regex: query } },
+        { content: { $regex: query } },
+        { tags: { $in: [query] } }
+      ]
+    }
+  })
+  
+  return results
+}
+
+const posts = await searchPosts("javascript")
+```
+
+### Tag Search
+
+```javascript
+// Find posts with tags containing "java"
+const { results } = await db.map({
+  query: {
+    type: "Post",
+    tags: { $regex: "java" }
+  }
+})
+```
+
+### Email Validation Query
+
+```javascript
+// Find users with valid email format
+const emailRegex = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+const { results } = await db.map({
+  query: {
+    type: "User",
+    email: { $regex: emailRegex }
+  }
+})
+```
+
+### File Extension Search
+
+```javascript
+// Find image files
+const { results: images } = await db.map({
+  query: {
+    type: "File",
+    name: { $regex: "\\.(jpg|jpeg|png|gif|webp)$" }
+  }
+})
+
+// Find documents
+const { results: docs } = await db.map({
+  query: {
+    type: "File",
+    name: { $regex: "\\.(pdf|doc|docx|txt)$" }
+  }
+})
+```
+
+### Autocomplete Search
+
+```javascript
+const autocomplete = async (prefix) => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      name: { $regex: `^${prefix}` }
+    },
+    $limit: 10
+  })
+  
+  return results.map(user => user.value.name)
+}
+
+const suggestions = await autocomplete("Al")
+// Returns: ["Alice", "Alan", "Alexandra", ...]
+```
+
+### Search with Highlighting
+
+```javascript
+const searchWithHighlight = async (searchTerm) => {
+  const { results } = await db.map({
+    query: {
+      type: "Post",
+      content: { $regex: searchTerm }
+    }
+  })
+  
+  return results.map(post => ({
+    ...post.value,
+    highlightedContent: post.value.content.replace(
+      new RegExp(searchTerm, "gi"),
+      match => `<mark>${match}</mark>`
+    )
+  }))
+}
+```
+
+### Real-Time Search
+
+```javascript
+let currentSearch = null
+
+const liveSearch = async (searchTerm) => {
+  // Unsubscribe from previous search
+  if (currentSearch) {
+    currentSearch.unsubscribe()
+  }
+  
+  const { unsubscribe } = await db.map(
+    {
+      query: {
+        type: "Product",
+        $or: [
+          { name: { $regex: searchTerm } },
+          { description: { $regex: searchTerm } }
+        ]
+      }
+    },
+    ({ id, value, action }) => {
+      if (action === "initial" || action === "added") {
+        addToSearchResults(value)
+      }
+    }
+  )
+  
+  currentSearch = { unsubscribe }
+}
+
+// User types in search box
+searchInput.addEventListener("input", (e) => {
+  liveSearch(e.target.value)
+})
+```
+
+### Fuzzy Search Simulation
+
+```javascript
+const fuzzySearch = async (term) => {
+  // Create regex with optional characters
+  const fuzzyPattern = term.split("").join(".*")
+  
+  const { results } = await db.map({
+    query: {
+      type: "Product",
+      name: { $regex: fuzzyPattern }
+    }
+  })
+  
+  return results
+}
+
+await fuzzySearch("gdb")
+// Matches: "GenosDB", "GDB", "GraphDB", etc.
+```
+
+## Full-Text Search with NLQ Module
+
+When the Natural Language Query module is enabled (`nlq: true`):
+
+```javascript
+const db = await gdb("my-db", { nlq: true })
+
+// Natural language search
+const { results } = await db.map({
+  prompt: 'Full text search "JavaScript"'
+})
+
+// Searches across common text fields:
+// - name
+// - role  
+// - level
+// - country
+// - title
+// - body
+// - tags
+```
+
+## Inverted Index Module
+
+For better performance on large datasets, enable the Inverted Index:
+
+```javascript
+const db = await gdb("my-db", { ii: true })
+
+// Searches are automatically optimized with the index
+const { results } = await db.map({
+  query: {
+    content: { $text: "important keywords" }
+  }
+})
+```
+
+## Regular Expression Patterns
+
+### Common Patterns
+
+```javascript
+// Phone numbers (US format)
+const phonePattern = "^\\d{3}-\\d{3}-\\d{4}$"
+
+// URLs
+const urlPattern = "^https?://.*"
+
+// Hashtags
+const hashtagPattern = "#\\w+"
+
+// Username (alphanumeric + underscore)
+const usernamePattern = "^[a-zA-Z0-9_]{3,20}$"
+
+// IP Address
+const ipPattern = "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"
+```
+
+### Using Patterns in Queries
+
+```javascript
+// Find users with valid usernames
+const { results } = await db.map({
+  query: {
+    type: "User",
+    username: { $regex: "^[a-zA-Z0-9_]{3,20}$" }
+  }
+})
+
+// Find posts with hashtags
+const { results: tagged } = await db.map({
+  query: {
+    type: "Post",
+    content: { $regex: "#\\w+" }
+  }
+})
+```
+
+## Performance Tips
+
+<Tip>
+**Prefix Searches**: For prefix-based searches, enable the Radix Index module (`rx: true`) for significant performance improvements:
+
+```javascript
+const db = await gdb("my-db", { rx: true })
+
+// Optimized prefix search
+const { results } = await db.map({
+  query: {
+    id: { $startsWith: "user:" }
+  }
+})
+```
+</Tip>
+
+<Warning>
+**Complex Regex**: Very complex regular expressions can be slow on large datasets. Consider:
+- Using simpler patterns when possible
+- Enabling the Inverted Index module
+- Combining with other filters to reduce the search space
+</Warning>
+
+## Case Sensitivity
+
+By default, text searches are case-insensitive. For case-sensitive searches:
+
+```javascript
+// Case-insensitive (default)
+const { results } = await db.map({
+  query: {
+    name: { $regex: "john" }  // Matches "John", "JOHN", "john"
+  }
+})
+
+// Case-sensitive (use regex flags if your implementation supports it)
+const { results } = await db.map({
+  query: {
+    name: { $regex: "(?-i)John" }  // Only matches exact case
+  }
+})
+```
+
+## Related Operators
+
+- [Comparison Operators](/api/operators/comparison) - $eq, $ne, $in, etc.
+- [Logical Operators](/api/operators/logical) - $and, $or, $not
+- [Radix Tree Module](/modules/radix-tree) - Prefix-based search
+- [NLQ Module](/modules/nlq) - Natural language queries

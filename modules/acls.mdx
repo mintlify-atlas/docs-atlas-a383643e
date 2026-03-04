@@ -1,0 +1,502 @@
+---
+title: 'Access Control Lists (ACLs)'
+description: 'Fine-grained node-level permissions for collaborative applications'
+---
+
+## Overview
+
+The ACLs module provides node-level permission control, enabling you to specify exactly who can read, write, or delete individual nodes. This is essential for collaborative applications where different users need different access to specific data.
+
+## Enabling ACLs
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-app", {
+  rtc: true,
+  sm: {
+    superAdmins: ["0x1234..."],
+    acls: true // Enable ACL module
+  }
+})
+```
+
+<Note>
+ACLs require the Security Manager to be enabled. They work alongside RBAC to provide comprehensive permission control.
+</Note>
+
+## Key Features
+
+- **Node Ownership**: Creator automatically becomes owner with full permissions
+- **Granular Permissions**: Grant/revoke `read`, `write`, `delete` per user per node
+- **Automatic Enforcement**: Middleware validates all operations
+- **Real-Time Sync**: Permission changes sync across peers
+- **Integration with RBAC**: ACL checks happen after RBAC validation
+
+## Permission Types
+
+### read
+
+Allows viewing the node's value and edges.
+
+```javascript
+// Grant read permission
+await db.sm.acls.grant(noteId, "0xUserAddress", "read")
+```
+
+### write
+
+Includes `read` + allows updating value and creating edges.
+
+```javascript
+// Grant write permission (includes read)
+await db.sm.acls.grant(docId, "0xCollaborator", "write")
+```
+
+### delete
+
+Includes `read` + `write` + allows deleting the node.
+
+```javascript
+// Grant delete permission (includes read and write)
+await db.sm.acls.grant(nodeId, "0xAdmin", "delete")
+```
+
+<Info>
+**Permission Hierarchy**: `delete` > `write` > `read`. Granting a higher permission automatically includes lower ones.
+</Info>
+
+## API Reference
+
+### db.sm.acls.set()
+
+Create or update a node with ACL protection.
+
+```javascript
+const noteId = await db.sm.acls.set({
+  title: "My Private Note",
+  content: "Confidential information"
+})
+
+// Current user is now the owner
+console.log("Note created:", noteId)
+```
+
+**Parameters:**
+
+<ParamField path="value" type="object" required>
+  The data to store (must be JSON-serializable)
+</ParamField>
+
+<ParamField path="id" type="string">
+  Optional node ID. Auto-generated if not provided
+</ParamField>
+
+**Returns:** `Promise<string>` - The node ID
+
+### db.sm.acls.grant()
+
+Grant a permission to a user for a specific node.
+
+```javascript
+await db.sm.acls.grant(
+  "note-123",
+  "0xCollaboratorAddress",
+  "write"
+)
+```
+
+**Parameters:**
+
+<ParamField path="nodeId" type="string" required>
+  The node ID
+</ParamField>
+
+<ParamField path="userAddress" type="string" required>
+  Ethereum address of the user
+</ParamField>
+
+<ParamField path="permission" type="'read' | 'write' | 'delete'" required>
+  Permission level to grant
+</ParamField>
+
+<Warning>
+**Owner Only**: Only the node owner can grant permissions. This operation will fail if called by a non-owner.
+</Warning>
+
+### db.sm.acls.revoke()
+
+Revoke all permissions from a user for a node.
+
+```javascript
+await db.sm.acls.revoke(
+  "note-123",
+  "0xCollaboratorAddress"
+)
+```
+
+**Parameters:**
+
+<ParamField path="nodeId" type="string" required>
+  The node ID
+</ParamField>
+
+<ParamField path="userAddress" type="string" required>
+  Ethereum address of the user
+</ParamField>
+
+<Info>
+**Owner Immunity**: You cannot revoke the owner's permissions. Ownership is permanent and set at node creation.
+</Info>
+
+### db.sm.acls.delete()
+
+Delete a node. Only the owner can delete.
+
+```javascript
+await db.sm.acls.delete("note-123")
+```
+
+### db.sm.acls.getPermissions()
+
+Get the permission structure for a node.
+
+```javascript
+const permissions = await db.sm.acls.getPermissions("note-123")
+
+console.log(permissions)
+// {
+//   owner: "0xOwnerAddress",
+//   collaborators: {
+//     "0xUser1": "read",
+//     "0xUser2": "write"
+//   }
+// }
+```
+
+## Examples
+
+### Collaborative Document Editor
+
+```javascript
+class DocumentEditor {
+  constructor(db) {
+    this.db = db
+  }
+  
+  async createDocument(title, content) {
+    const docId = await this.db.sm.acls.set({
+      type: "document",
+      title,
+      content,
+      created: Date.now()
+    })
+    
+    console.log("Document created:", docId)
+    return docId
+  }
+  
+  async shareDocument(docId, userAddress, permission = "read") {
+    try {
+      await this.db.sm.acls.grant(docId, userAddress, permission)
+      console.log(`Shared with ${userAddress} (${permission})`)
+    } catch (error) {
+      console.error("Failed to share:", error.message)
+    }
+  }
+  
+  async loadDocument(docId) {
+    const { result: doc } = await this.db.get(docId)
+    
+    if (!doc) {
+      throw new Error("Document not found")
+    }
+    
+    const currentUser = this.db.sm.getActiveEthAddress()
+    const canEdit = doc.value.owner === currentUser ||
+                   doc.value.collaborators?.[currentUser] === "write"
+    
+    return {
+      data: doc.value,
+      canEdit,
+      isOwner: doc.value.owner === currentUser
+    }
+  }
+  
+  async updateDocument(docId, updates) {
+    const { result: doc } = await this.db.get(docId)
+    const currentUser = this.db.sm.getActiveEthAddress()
+    
+    // Check write permission
+    const canEdit = doc.value.owner === currentUser ||
+                   doc.value.collaborators?.[currentUser] === "write"
+    
+    if (!canEdit) {
+      throw new Error("No write permission")
+    }
+    
+    await this.db.sm.acls.set({
+      ...doc.value,
+      ...updates,
+      modified: Date.now(),
+      modifiedBy: currentUser
+    }, docId)
+  }
+  
+  async revokeAccess(docId, userAddress) {
+    await this.db.sm.acls.revoke(docId, userAddress)
+    console.log(`Revoked access for ${userAddress}`)
+  }
+}
+
+// Usage
+const editor = new DocumentEditor(db)
+const docId = await editor.createDocument(
+  "Project Plan",
+  "Q1 objectives..."
+)
+
+// Share with collaborators
+await editor.shareDocument(docId, "0xAlice", "write")
+await editor.shareDocument(docId, "0xBob", "read")
+```
+
+### Task Management System
+
+```javascript
+class TaskManager {
+  constructor(db) {
+    this.db = db
+  }
+  
+  async createTask(title, description, assignee = null) {
+    const taskId = await this.db.sm.acls.set({
+      type: "task",
+      title,
+      description,
+      status: "pending",
+      created: Date.now()
+    })
+    
+    // Assign to user if specified
+    if (assignee) {
+      await this.db.sm.acls.grant(taskId, assignee, "write")
+    }
+    
+    return taskId
+  }
+  
+  async assignTask(taskId, userAddress) {
+    await this.db.sm.acls.grant(taskId, userAddress, "write")
+    console.log(`Task assigned to ${userAddress}`)
+  }
+  
+  async unassignTask(taskId, userAddress) {
+    await this.db.sm.acls.revoke(taskId, userAddress)
+    console.log(`Task unassigned from ${userAddress}`)
+  }
+  
+  async updateStatus(taskId, status) {
+    const { result: task } = await this.db.get(taskId)
+    const currentUser = this.db.sm.getActiveEthAddress()
+    
+    const canUpdate = task.value.owner === currentUser ||
+                     task.value.collaborators?.[currentUser] === "write"
+    
+    if (!canUpdate) {
+      throw new Error("Cannot update task")
+    }
+    
+    await this.db.sm.acls.set({
+      ...task.value,
+      status,
+      updated: Date.now()
+    }, taskId)
+  }
+  
+  async getTasks() {
+    const { results } = await this.db.map({
+      query: { type: "task" }
+    })
+    
+    const currentUser = this.db.sm.getActiveEthAddress()
+    
+    return results.map(task => ({
+      ...task,
+      canEdit: task.value.owner === currentUser ||
+              task.value.collaborators?.[currentUser] === "write"
+    }))
+  }
+}
+```
+
+### Private Notes with Selective Sharing
+
+```javascript
+class PrivateNotes {
+  async createNote(title, content) {
+    return await db.sm.acls.set({
+      type: "note",
+      title,
+      content,
+      created: Date.now()
+    })
+  }
+  
+  async shareNote(noteId, friendAddress) {
+    // Share with read-only access
+    await db.sm.acls.grant(noteId, friendAddress, "read")
+  }
+  
+  async shareForEditing(noteId, collaboratorAddress) {
+    // Share with edit access
+    await db.sm.acls.grant(noteId, collaboratorAddress, "write")
+  }
+  
+  async listMyNotes() {
+    const { results } = await db.map({
+      query: { type: "note" }
+    })
+    
+    const currentUser = db.sm.getActiveEthAddress()
+    
+    // Filter notes user can access
+    return results.filter(note => {
+      return note.value.owner === currentUser ||
+             note.value.collaborators?.[currentUser]
+    })
+  }
+}
+```
+
+## Permission Evaluation Flow
+
+1. **RBAC Check**: User must have required role permission (e.g., "write")
+2. **ACL Check**: User must have node-level permission
+3. **Operation Executes**: Only if both checks pass
+
+```javascript
+// When user attempts to update a node:
+// 1. Check: Does user's role allow 'write'? (RBAC)
+// 2. Check: Does user have 'write' on this specific node? (ACL)
+// 3. If both pass: Update succeeds
+// 4. If either fails: Operation rejected
+```
+
+## Client-Side Permission Checks
+
+```javascript
+const checkPermissions = async (nodeId) => {
+  const { result: node } = await db.get(nodeId)
+  const currentUser = db.sm.getActiveEthAddress()
+  
+  return {
+    canRead: node.value.owner === currentUser ||
+            node.value.collaborators?.[currentUser],
+    
+    canWrite: node.value.owner === currentUser ||
+             node.value.collaborators?.[currentUser] === "write" ||
+             node.value.collaborators?.[currentUser] === "delete",
+    
+    canDelete: node.value.owner === currentUser ||
+              node.value.collaborators?.[currentUser] === "delete",
+    
+    isOwner: node.value.owner === currentUser
+  }
+}
+
+// Use in UI
+const perms = await checkPermissions(docId)
+
+if (perms.canWrite) {
+  showEditButton()
+}
+
+if (perms.canDelete) {
+  showDeleteButton()
+}
+```
+
+## Real-Time Permission Updates
+
+```javascript
+// Monitor permission changes
+const { unsubscribe } = await db.get(docId, (node) => {
+  if (!node) return
+  
+  const currentUser = db.sm.getActiveEthAddress()
+  const permission = node.value.collaborators?.[currentUser]
+  
+  if (!permission && node.value.owner !== currentUser) {
+    // Access revoked
+    console.log("You no longer have access to this document")
+    closeDocument()
+  } else if (permission === "read") {
+    // Downgraded to read-only
+    console.log("Document is now read-only")
+    disableEditing()
+  } else if (permission === "write") {
+    // Upgraded to write
+    console.log("You can now edit this document")
+    enableEditing()
+  }
+})
+```
+
+## Best Practices
+
+<Tip>
+**Check Permissions Client-Side**: Always check permissions before showing UI controls to provide better UX:
+
+```javascript
+const { canEdit } = await checkPermissions(nodeId)
+
+if (canEdit) {
+  showEditButton()
+} else {
+  hideEditButton()
+}
+```
+</Tip>
+
+<Warning>
+**Don't Rely on Client Checks Alone**: Client-side checks are for UX only. The server-side (P2P middleware) always enforces permissions.
+</Warning>
+
+<Tip>
+**Use Appropriate Permission Levels**: Grant minimal required permissions:
+- Read: For viewers
+- Write: For collaborators
+- Delete: Only for co-owners or admins
+</Tip>
+
+## Troubleshooting
+
+### Permission Denied Errors
+
+```javascript
+try {
+  await db.sm.acls.set(updatedData, nodeId)
+} catch (error) {
+  if (error.message.includes("permission")) {
+    console.error("You don't have write access to this node")
+    // Show read-only view
+  }
+}
+```
+
+### Checking Current Permissions
+
+```javascript
+const { result: node } = await db.get(nodeId)
+const currentUser = db.sm.getActiveEthAddress()
+
+console.log("Owner:", node.value.owner)
+console.log("Your address:", currentUser)
+console.log("Your permission:", node.value.collaborators?.[currentUser])
+```
+
+## Related Modules
+
+- [Security Manager](/modules/security-manager) - RBAC and identity
+- [Audit Module](/modules/audit) - Content policy enforcement

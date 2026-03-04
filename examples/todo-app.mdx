@@ -1,0 +1,580 @@
+---
+title: Building a Todo App
+description: Learn GenosDB fundamentals by building a real-time collaborative todo list with CRUD operations and reactive queries
+---
+
+## Overview
+
+This tutorial walks through building a real-time todo list application with GenosDB. You'll learn:
+
+- Basic CRUD operations (`put`, `get`, `remove`)
+- Reactive queries with `map()`
+- Real-time P2P synchronization
+- Persistent local storage
+
+<Tip>
+View the [live demo](https://estebanrfp.github.io/gdb/examples/todolist.html) or see the [full source code](https://github.com/estebanrfp/gdb/blob/main/examples/todolist.html).
+</Tip>
+
+## What We're Building
+
+A collaborative todo list that:
+- Syncs instantly across browser tabs
+- Syncs in real-time between devices
+- Persists data locally (survives refresh)
+- Supports inline editing
+- Marks tasks as complete
+
+## Project Setup
+
+Create a new HTML file:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenosDB Todo List</title>
+</head>
+<body>
+  <h2>To-Do List</h2>
+  <input type="text" id="taskInput" placeholder="New task">
+  <ul id="taskList"></ul>
+  
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+```
+
+## Step 1: Initialize GenosDB
+
+Create `app.js`:
+
+```javascript
+import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js'
+
+// Initialize database with P2P enabled
+const db = await gdb('todoList', { rtc: true })
+
+console.log('GenosDB initialized')
+```
+
+<Info>
+The database name `'todoList'` serves as the room ID. All users connecting to the same name will sync their todos.
+</Info>
+
+## Step 2: Track Active Todos
+
+Keep track of todo IDs to avoid duplicates:
+
+```javascript
+const currentNodeIds = new Set()
+```
+
+## Step 3: Create Todo Elements
+
+Function to build DOM elements for each todo:
+
+```javascript
+function createTaskElements(li, id, { text, completed }) {
+  // Task text (clickable to toggle completion)
+  const taskTextSpan = document.createElement('span')
+  taskTextSpan.className = completed ? 'completed' : ''
+  taskTextSpan.textContent = text
+  taskTextSpan.onclick = () => toggleTask(id)
+
+  // Edit input (hidden by default)
+  const taskEditTextInput = document.createElement('input')
+  taskEditTextInput.type = 'text'
+  taskEditTextInput.value = text
+  taskEditTextInput.className = 'edit-mode hidden'
+  taskEditTextInput.addEventListener('keypress', async (e) => {
+    if (e.key === 'Enter') await saveEdit(id, taskEditTextInput.value)
+  })
+
+  // Button container
+  const iconContainer = document.createElement('div')
+  iconContainer.className = 'icon-container'
+
+  // Edit button
+  const editButton = document.createElement('button')
+  editButton.innerHTML = '✏️'
+  editButton.onclick = () => enableEditMode(li)
+
+  // Delete button
+  const deleteButton = document.createElement('button')
+  deleteButton.innerHTML = '🗑️'
+  deleteButton.onclick = () => deleteTask(id)
+
+  // Save/Cancel buttons (hidden by default)
+  const editButtonsContainer = document.createElement('div')
+  editButtonsContainer.className = 'edit-buttons hidden'
+
+  const saveButton = document.createElement('button')
+  saveButton.innerHTML = '💾'
+  saveButton.onclick = () => saveEdit(id, taskEditTextInput.value)
+
+  const cancelButton = document.createElement('button')
+  cancelButton.innerHTML = '❌'
+  cancelButton.onclick = () => cancelEdit(li)
+
+  editButtonsContainer.append(saveButton, cancelButton)
+  iconContainer.append(editButton, editButtonsContainer, deleteButton)
+  li.append(taskTextSpan, taskEditTextInput, iconContainer)
+}
+```
+
+## Step 4: Handle Real-Time Events
+
+Functions to update UI when todos change:
+
+```javascript
+// Add new todo to UI
+function handleAddTask(id, value) {
+  if (!value || typeof value !== 'object') return
+  
+  const { text, completed } = value
+  const li = document.createElement('li')
+  li.id = id
+  
+  createTaskElements(li, id, { text, completed })
+  document.getElementById('taskList').appendChild(li)
+  currentNodeIds.add(id)
+}
+
+// Update existing todo in UI
+function handleUpdateTask(id, { text, completed }) {
+  const li = document.getElementById(id)
+  if (!li) return
+
+  const taskTextSpan = li.querySelector('span')
+  const taskEditTextInput = li.querySelector('input')
+
+  taskTextSpan.textContent = text
+  taskTextSpan.className = completed ? 'completed' : ''
+  taskEditTextInput.value = text
+
+  // Exit edit mode if active
+  if (!taskEditTextInput.classList.contains('hidden')) {
+    cancelEdit(li)
+  }
+}
+
+// Remove todo from UI
+function handleDeleteTask(id) {
+  const li = document.getElementById(id)
+  if (li) {
+    li.remove()
+    currentNodeIds.delete(id)
+  }
+}
+```
+
+## Step 5: Subscribe to Todo Changes
+
+Use `map()` to listen for real-time updates:
+
+```javascript
+const { unsubscribe } = await db.map(({ id, value, action }) => {
+  if (action === "initial" || action === "added") {
+    handleAddTask(id, value)
+  }
+  if (action === "updated") {
+    handleUpdateTask(id, value)
+  }
+  if (action === "removed") {
+    handleDeleteTask(id)
+  }
+})
+```
+
+<Info>
+This subscription fires for:
+- **initial**: Each existing todo when page loads
+- **added**: New todos created by any user
+- **updated**: Todos modified by any user
+- **removed**: Todos deleted by any user
+</Info>
+
+## Step 6: Implement Todo Operations
+
+### Add New Todo
+
+```javascript
+async function addTask() {
+  const input = document.getElementById('taskInput')
+  if (!input.value.trim()) return
+
+  await db.put({
+    text: input.value,
+    completed: false
+  })
+  
+  input.value = ''
+}
+
+// Add todo on Enter key
+document.getElementById('taskInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') addTask()
+})
+```
+
+### Toggle Completion
+
+```javascript
+async function toggleTask(id) {
+  const li = document.getElementById(id)
+  if (!li) return
+
+  const taskTextSpan = li.querySelector('span')
+  const completed = !taskTextSpan.classList.contains('completed')
+  
+  taskTextSpan.classList.toggle('completed')
+  
+  await db.put({
+    text: taskTextSpan.textContent,
+    completed
+  }, id)
+}
+```
+
+### Edit Todo
+
+```javascript
+function enableEditMode(li) {
+  li.querySelector('span').classList.add('hidden')
+  li.querySelector('input').classList.remove('hidden')
+  li.querySelector('.edit-buttons').classList.remove('hidden')
+  li.querySelector('button:first-child').style.display = 'none'
+}
+
+function cancelEdit(li) {
+  li.querySelector('span').classList.remove('hidden')
+  li.querySelector('input').classList.add('hidden')
+  li.querySelector('.edit-buttons').classList.add('hidden')
+  li.querySelector('button:first-child').style.display = 'inline-block'
+}
+
+async function saveEdit(id, newText) {
+  if (!newText.trim()) return
+
+  const li = document.getElementById(id)
+  if (!li) return
+
+  const taskTextSpan = li.querySelector('span')
+  const completed = taskTextSpan.classList.contains('completed')
+  
+  await db.put({ text: newText.trim(), completed }, id)
+  cancelEdit(li)
+}
+```
+
+### Delete Todo
+
+```javascript
+async function deleteTask(id) {
+  await db.remove(id)
+}
+```
+
+## Step 7: Add Styles
+
+```html
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    max-width: 400px;
+    margin: auto;
+    padding: 20px;
+    background-color: #f4f7fc;
+    color: #333;
+  }
+
+  h2 {
+    text-align: center;
+    color: #444;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  li {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  li span {
+    flex: 1;
+    cursor: pointer;
+  }
+
+  .completed {
+    text-decoration: line-through;
+    color: gray;
+  }
+
+  button {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: transform 0.2s;
+  }
+
+  button:hover {
+    transform: scale(1.1);
+  }
+
+  .edit-mode {
+    display: inline-block;
+    width: 70%;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .icon-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .edit-buttons {
+    display: flex;
+    gap: 5px;
+  }
+</style>
+```
+
+## Complete Code
+
+Here's the full `app.js`:
+
+```javascript
+import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js'
+
+const db = await gdb('todoList', { rtc: true })
+const currentNodeIds = new Set()
+
+// UI Handlers
+function handleAddTask(id, value) {
+  if (!value || typeof value !== 'object') return
+  const { text, completed } = value
+  const li = document.createElement('li')
+  li.id = id
+  createTaskElements(li, id, { text, completed })
+  document.getElementById('taskList').appendChild(li)
+  currentNodeIds.add(id)
+}
+
+function handleUpdateTask(id, { text, completed }) {
+  const li = document.getElementById(id)
+  if (!li) return
+  const taskTextSpan = li.querySelector('span')
+  const taskEditTextInput = li.querySelector('input')
+  taskTextSpan.textContent = text
+  taskTextSpan.className = completed ? 'completed' : ''
+  taskEditTextInput.value = text
+  if (!taskEditTextInput.classList.contains('hidden')) cancelEdit(li)
+}
+
+function handleDeleteTask(id) {
+  const li = document.getElementById(id)
+  if (li) {
+    li.remove()
+    currentNodeIds.delete(id)
+  }
+}
+
+// Database Operations
+async function addTask() {
+  const input = document.getElementById('taskInput')
+  if (!input.value.trim()) return
+  await db.put({ text: input.value, completed: false })
+  input.value = ''
+}
+
+async function toggleTask(id) {
+  const li = document.getElementById(id)
+  if (!li) return
+  const taskTextSpan = li.querySelector('span')
+  const completed = !taskTextSpan.classList.contains('completed')
+  taskTextSpan.classList.toggle('completed')
+  await db.put({ text: taskTextSpan.textContent, completed }, id)
+}
+
+async function saveEdit(id, newText) {
+  if (!newText.trim()) return
+  const li = document.getElementById(id)
+  if (!li) return
+  const taskTextSpan = li.querySelector('span')
+  const completed = taskTextSpan.classList.contains('completed')
+  await db.put({ text: newText.trim(), completed }, id)
+  cancelEdit(li)
+}
+
+async function deleteTask(id) {
+  await db.remove(id)
+}
+
+// Subscribe to real-time updates
+await db.map(({ id, value, action }) => {
+  if (action === "initial" || action === "added") handleAddTask(id, value)
+  if (action === "updated") handleUpdateTask(id, value)
+  if (action === "removed") handleDeleteTask(id)
+})
+
+// Event listener
+document.getElementById('taskInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') addTask()
+})
+```
+
+## Testing the App
+
+<Steps>
+  <Step title="Open in Browser">
+    Open your HTML file in a browser (e.g., `http://localhost:8080/todo.html`).
+  </Step>
+  
+  <Step title="Add Todos">
+    Type a task and press Enter. It appears instantly in the list.
+  </Step>
+  
+  <Step title="Test Cross-Tab Sync">
+    Open the same page in another tab. Changes sync instantly!
+  </Step>
+  
+  <Step title="Test P2P Sync">
+    Open on a different device on the same network. Changes sync across devices.
+  </Step>
+</Steps>
+
+## Key Concepts Demonstrated
+
+### 1. Reactive Queries
+
+```javascript
+await db.map(({ id, value, action }) => {
+  // Fires for initial data and all future changes
+})
+```
+
+The `map()` callback receives events for all data changes, enabling reactive UI updates.
+
+### 2. CRUD Operations
+
+```javascript
+// Create
+await db.put({ text: 'New todo', completed: false })
+
+// Read (handled by map subscription)
+
+// Update
+await db.put({ text: 'Updated', completed: true }, existingId)
+
+// Delete
+await db.remove(id)
+```
+
+### 3. Real-Time P2P Sync
+
+With `{ rtc: true }`, all operations automatically sync:
+- Across browser tabs (via BroadcastChannel)
+- Across devices (via WebRTC)
+- Persistently (via OPFS storage)
+
+## Enhancements
+
+### Add Filtering
+
+```javascript
+// Show only active todos
+await db.map(
+  { query: { completed: false } },
+  ({ id, value, action }) => { ... }
+)
+
+// Show only completed todos
+await db.map(
+  { query: { completed: true } },
+  ({ id, value, action }) => { ... }
+)
+```
+
+### Add Sorting
+
+```javascript
+// Sort by creation time (if you add a timestamp)
+await db.map(
+  {
+    query: { type: 'todo' },
+    field: 'createdAt',
+    order: 'desc'
+  },
+  ({ id, value, action }) => { ... }
+)
+```
+
+### Add Security
+
+```javascript
+const db = await gdb('todoList', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0xYourAddress...']  // Enable RBAC
+  }
+})
+
+// Users must authenticate to modify todos
+await db.sm.loginCurrentUserWithWebAuthn()
+```
+
+## Advanced Features
+
+See the [Advanced Todo List](https://estebanrfp.github.io/gdb/examples/advanced-todolist.html) for:
+
+- Filter tabs (All / Active / Completed)
+- Clear completed button
+- Todo count display
+- Improved UI/UX
+- Responsive design
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat App" icon="comments" href="/examples/chat-app">
+    Build a real-time chat application
+  </Card>
+  
+  <Card title="Queries Guide" icon="magnifying-glass" href="/guides/queries">
+    Learn advanced query operators
+  </Card>
+  
+  <Card title="Security Model" icon="shield" href="/concepts/security-model">
+    Add authentication and permissions
+  </Card>
+  
+  <Card title="Graph Traversal" icon="diagram-project" href="/guides/graph-traversal">
+    Master the $edge operator
+  </Card>
+</CardGroup>

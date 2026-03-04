@@ -1,0 +1,254 @@
+---
+title: 'gdb() - Database Initialization'
+description: 'Initialize a GenosDB instance with configuration options'
+---
+
+## Overview
+
+The `gdb()` function is an async factory function that creates and configures a GenosDB database connection. It serves as the entry point for all GenosDB operations.
+
+## Signature
+
+```typescript
+await gdb(name: string, options?: DatabaseOptions): Promise<GDB>
+```
+
+## Parameters
+
+<ParamField path="name" type="string" required>
+  Database name used for local storage and P2P synchronization.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Configuration options for the database instance.
+
+  <Expandable title="options properties">
+    <ParamField path="rtc" type="boolean | object">
+      Enables real-time P2P networking and relay connections. Pass `true` for defaults or an object to customize:
+      
+      <Expandable title="rtc configuration">
+        <ParamField path="relayUrls" type="string[]">
+          Custom list of secure WebSocket relay URLs for Nostr peer discovery.
+        </ParamField>
+        
+        <ParamField path="turnConfig" type="Array<object>">
+          Configuration for TURN servers:
+          - `urls`: Single string or array of TURN server URLs
+          - `username`: Authentication username
+          - `credential`: Authentication password
+        </ParamField>
+        
+        <ParamField path="cells" type="boolean | object">
+          Enable Cellular Mesh overlay for massive scalability. Pass `true` for defaults or configure:
+          - `cellSize`: `"auto"` or fixed number (default: `"auto"`)
+          - `bridgesPerEdge`: Redundancy between cells (default: 2)
+          - `maxCellSize`: Upper limit per cell (default: 50)
+          - `targetCells`: Target number of cells (default: 100)
+          - `debug`: Enable debug logging (default: false)
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="sm" type="object">
+      Enables and configures the Security Manager for RBAC, ACLs, and identity management.
+      
+      <Expandable title="sm configuration">
+        <ParamField path="superAdmins" type="string[]" required>
+          Array of authorized Ethereum addresses with superadmin privileges. **Mandatory** when enabling SM.
+        </ParamField>
+        
+        <ParamField path="customRoles" type="object">
+          Custom role definitions with permissions and inheritance.
+        </ParamField>
+        
+        <ParamField path="acls" type="boolean">
+          Enable Access Control Lists for node-level permissions (default: false).
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="ai" type="boolean">
+      Load the AI module for enhanced functionality.
+    </ParamField>
+    
+    <ParamField path="nlq" type="boolean">
+      Load the Natural Language Query module for prompt-based queries.
+    </ParamField>
+    
+    <ParamField path="rx" type="boolean">
+      Load the Radix Index module for prefix-based searches.
+    </ParamField>
+    
+    <ParamField path="ii" type="boolean">
+      Load the Inverted Index module for full-text search.
+    </ParamField>
+    
+    <ParamField path="geo" type="boolean">
+      Load the Geo module for spatial queries (`$near`, `$bbox` operators).
+    </ParamField>
+    
+    <ParamField path="audit" type="boolean | object">
+      Load the Audit module for content policy enforcement.
+      
+      <Expandable title="audit configuration">
+        <ParamField path="prompt" type="string">
+          Custom audit policy prompt (e.g., "detect offensive or inappropriate language").
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="password" type="string">
+      Optional encryption key for securing database content.
+    </ParamField>
+    
+    <ParamField path="saveDelay" type="number" default={200}>
+      Debounce delay in milliseconds for saving to persistent storage. Higher values reduce disk I/O but increase data loss risk on crashes.
+    </ParamField>
+    
+    <ParamField path="oplogSize" type="number" default={20}>
+      Maximum number of recent operations in the operation log for delta-based P2P synchronization. Larger values enable efficient sync after longer disconnections but consume more memory.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="db" type="GDB">
+  A configured GenosDB instance ready for data operations.
+</ResponseField>
+
+## Examples
+
+### Basic Initialization
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db")
+```
+
+### With Password Encryption
+
+```javascript
+const secureDb = await gdb("secure-db", { 
+  password: "secret" 
+})
+```
+
+### Enable P2P Networking
+
+```javascript
+const db = await gdb("my-db", { 
+  rtc: true 
+})
+```
+
+### Custom Relay Configuration
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: {
+    relayUrls: ["wss://relay1.example.com", "wss://relay2.example.com"]
+  }
+})
+```
+
+### TURN Server Configuration
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: {
+    turnConfig: [
+      {
+        urls: ["turn:your-turn-server.ok:1979"],
+        username: "username",
+        credential: "password"
+      }
+    ]
+  }
+})
+```
+
+### Cellular Mesh for Massive Scale
+
+```javascript
+// Default cellular mesh
+const db = await gdb("my-db", {
+  rtc: { cells: true }
+})
+
+// Custom cellular configuration
+const db = await gdb("my-db", {
+  rtc: {
+    cells: {
+      cellSize: "auto",
+      bridgesPerEdge: 2,
+      maxCellSize: 50,
+      targetCells: 100,
+      debug: false
+    }
+  }
+})
+```
+
+### Enable Security Manager
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: true, // Required for SM
+  sm: {
+    superAdmins: ["0x1234...", "0x5678..."]
+  }
+})
+```
+
+### Enable Multiple Modules
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: true,
+  nlq: true,  // Natural Language Queries
+  rx: true,   // Radix Index
+  geo: true,  // Geo-spatial queries
+  audit: { 
+    prompt: "detect offensive or inappropriate language" 
+  }
+})
+```
+
+### Performance Tuning
+
+```javascript
+const db = await gdb("my-db", {
+  saveDelay: 500,   // Reduce disk writes
+  oplogSize: 100    // Support longer offline periods
+})
+```
+
+## Best Practices
+
+<Tip>
+Use top-level `await` in modern environments (`<script type="module">`) to avoid unnecessary async function wrappers:
+
+```javascript
+// ✅ Recommended
+import { gdb } from "genosdb"
+const db = await gdb("my-app")
+
+// ❌ Avoid unless needed for user actions
+async function init() {
+  const db = await gdb("my-app")
+}
+```
+</Tip>
+
+<Warning>
+When enabling the Security Manager, `rtc: true` is **required** as SM relies on the Real-Time Communication module for cryptographic signing and verification of P2P operations.
+</Warning>
+
+## Related Methods
+
+- [put()](/api/put) - Insert or update nodes
+- [get()](/api/get) - Retrieve nodes
+- [map()](/api/map) - Query with filters
+- [Security Manager](/modules/security-manager) - RBAC and identity management

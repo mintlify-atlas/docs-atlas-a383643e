@@ -1,0 +1,193 @@
+---
+title: Introduction to GenosDB
+description: A lightweight, decentralized P2P graph database for modern web applications
+---
+
+# Introduction to GenosDB
+
+GenosDB (GDB) is a lightweight, decentralized peer-to-peer (P2P) graph database designed for modern web applications. It runs entirely in the browser, offering real-time synchronization, powerful graph queries, and built-in security without requiring a backend server.
+
+## What is GenosDB?
+
+GenosDB is a browser-native graph database that combines:
+
+- **Graph data model** for storing nodes and relationships
+- **Real-time P2P synchronization** via WebRTC and Nostr
+- **Powerful query capabilities** with recursive graph traversal
+- **Built-in security** with RBAC and WebAuthn
+- **Local-first architecture** using OPFS for persistent storage
+
+<Note>
+GenosDB is currently in **stable beta**. The API is stable but may receive minor updates as we work toward v1.0. Check the [CHANGELOG](https://github.com/estebanrfp/gdb/blob/main/CHANGELOG.md) for updates.
+</Note>
+
+## Why Use GenosDB?
+
+### Truly Decentralized
+
+No backend servers required. Peers connect directly to each other via WebRTC, with data syncing automatically in real-time. Your application can work offline and sync when reconnected.
+
+### Developer-Friendly API
+
+Simple, intuitive methods for CRUD operations:
+
+```javascript
+const db = await gdb('my-app', { rtc: true });
+
+// Store data
+const id = await db.put({ name: 'Alice', age: 30 });
+
+// Query with real-time updates
+await db.map({ query: { age: { $gt: 18 } } }, ({ id, value, action }) => {
+  console.log(`User ${action}:`, value);
+});
+```
+
+### Graph-Native
+
+Unlike traditional databases, GenosDB is built for relationships:
+
+```javascript
+// Create nodes and relationships
+const aliceId = await db.put({ type: 'User', name: 'Alice' });
+const bobId = await db.put({ type: 'User', name: 'Bob' });
+await db.link(aliceId, bobId); // Alice knows Bob
+
+// Traverse the graph recursively
+const friends = await db.map({
+  query: { 
+    name: 'Alice',
+    $edge: { type: 'User' } // Find all connected users
+  }
+});
+```
+
+### Real-Time by Default
+
+Every query can be reactive. Changes sync instantly across all connected peers:
+
+```javascript
+// Real-time chat messages
+await db.map(
+  { query: { type: 'message' } },
+  ({ value, action }) => {
+    if (action === 'added') renderMessage(value);
+  }
+);
+```
+
+### Scales Horizontally
+
+Optional Cellular Mesh topology enables scaling to thousands of concurrent peers by reducing connection complexity from O(N²) to O(N).
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="High Performance" icon="bolt">
+    Processes tens of thousands of operations per second using OPFS for storage and Web Workers for non-blocking execution.
+  </Card>
+  
+  <Card title="Flexible Queries" icon="magnifying-glass">
+    MongoDB-style query operators with support for text search, regex, logical operations, and recursive graph traversal.
+  </Card>
+  
+  <Card title="P2P Sync" icon="arrows-rotate">
+    Intelligent hybrid synchronization combines delta updates for speed with full-state fallback for reliability.
+  </Card>
+  
+  <Card title="Built-in Security" icon="shield-halved">
+    Role-Based Access Control (RBAC), WebAuthn authentication, and optional per-node ACLs for fine-grained permissions.
+  </Card>
+  
+  <Card title="Conflict Resolution" icon="code-merge">
+    LWW-CRDT with Hybrid Logical Clocks ensures deterministic conflict resolution across peers.
+  </Card>
+  
+  <Card title="Modular Architecture" icon="puzzle-piece">
+    Enable only the features you need: Security Module, Radix Indexer, Geo Module, Audit Module, and more.
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+GenosDB is perfect for:
+
+- **Real-time collaboration tools** (docs, whiteboards, kanban boards)
+- **Decentralized chat applications** and social networks
+- **P2P video conferencing** with WebRTC media streaming
+- **Offline-first mobile apps** with automatic sync
+- **Inventory management systems** requiring graph relationships
+- **Secure document sharing** with granular permissions
+
+## Architecture Overview
+
+GenosDB consists of several integrated modules:
+
+```plaintext
+┌─────────────────────────────────────────────────────────┐
+│                    GenosDB (GDB)                        │
+├─────────────────────────────────────────────────────────┤
+│  Core Engine: put, get, link, map, remove              │
+├─────────────────────────────────────────────────────────┤
+│  GenosRTC: WebRTC + Nostr for P2P Communication        │
+├─────────────────────────────────────────────────────────┤
+│  Security Manager: RBAC, WebAuthn, ACLs                │
+├─────────────────────────────────────────────────────────┤
+│  Storage: OPFS (Origin Private File System)            │
+├─────────────────────────────────────────────────────────┤
+│  Sync: Oplog + Delta Sync + Full-State Fallback        │
+├─────────────────────────────────────────────────────────┤
+│  Conflict Resolution: LWW-CRDT + Hybrid Logical Clock   │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Getting Started
+
+Ready to build with GenosDB? Start with our [Installation Guide](/installation) or jump straight into the [Quickstart Tutorial](/quickstart).
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install GenosDB via npm, yarn, or CDN
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first real-time app in 5 minutes
+  </Card>
+  
+  <Card title="Core Concepts" icon="book" href="/concepts/graph-database">
+    Learn about graph databases and P2P sync
+  </Card>
+  
+  <Card title="Examples" icon="code" href="/examples/overview">
+    Explore working code examples
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+GenosDB is actively maintained and has a growing community:
+
+- [GitHub Repository](https://github.com/estebanrfp/gdb)
+- [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions)
+- [Issue Tracker](https://github.com/estebanrfp/gdb/issues)
+- [Medium Blog](https://medium.com/genosdb)
+
+## What's Next?
+
+<Steps>
+  <Step title="Install GenosDB">
+    Get GenosDB running in your project via npm or CDN
+  </Step>
+  
+  <Step title="Complete the Quickstart">
+    Build a real-time todo app to learn the basics
+  </Step>
+  
+  <Step title="Explore Core Concepts">
+    Understand graph databases, P2P sync, and security
+  </Step>
+  
+  <Step title="Build Your App">
+    Use our guides and examples to create your application
+  </Step>
+</Steps>

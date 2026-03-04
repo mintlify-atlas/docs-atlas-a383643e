@@ -1,0 +1,387 @@
+---
+title: 'Security Manager (SM)'
+description: 'Role-Based Access Control, ACLs, and identity management for GenosDB'
+---
+
+## Overview
+
+The Security Manager (SM) provides comprehensive security features for GenosDB, including:
+
+- **Identity Management**: WebAuthn and mnemonic-based authentication
+- **Role-Based Access Control (RBAC)**: Configurable role hierarchies with permissions
+- **Access Control Lists (ACLs)**: Node-level permissions
+- **P2P Operation Security**: Cryptographic signing and verification
+- **Local Data Encryption**: User-specific encrypted storage
+
+## Enabling the Security Manager
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db", {
+  rtc: true, // Required for SM
+  sm: {
+    superAdmins: ["0x1234...", "0x5678..."], // MANDATORY
+    customRoles: { /* optional */ },
+    acls: true // Enable node-level ACLs
+  }
+})
+```
+
+<Warning>
+**Required Configuration**: The `superAdmins` array is mandatory when enabling SM. The module will not initialize without it.
+</Warning>
+
+<Note>
+The Security Manager requires `rtc: true` because it relies on the Real-Time Communication module for P2P security middleware, signing, and verifying operations between peers.
+</Note>
+
+## Identity Management
+
+### Generate New Identity
+
+```javascript
+const newIdentity = await db.sm.startNewUserRegistration()
+
+if (newIdentity) {
+  console.log("Address:", newIdentity.address)
+  console.log("Mnemonic:", newIdentity.mnemonic)
+  console.log("Private Key:", newIdentity.privateKey)
+  
+  // CRITICAL: User must save the mnemonic phrase securely
+}
+```
+
+### Protect Identity with WebAuthn
+
+```javascript
+// After generating identity, protect it with biometrics/security key
+const address = await db.sm.protectCurrentIdentityWithWebAuthn(
+  newIdentity.privateKey
+)
+
+if (address) {
+  console.log(`Identity protected: ${address}`)
+}
+```
+
+### Login with WebAuthn
+
+```javascript
+// Requires prior WebAuthn registration
+const address = await db.sm.loginCurrentUserWithWebAuthn()
+
+if (address) {
+  console.log(`Logged in as: ${address}`)
+}
+```
+
+### Login with Mnemonic
+
+```javascript
+const mnemonic = "your twelve word secret recovery phrase..."
+
+const identity = await db.sm.loginOrRecoverUserWithMnemonic(mnemonic)
+
+if (identity) {
+  console.log(`Logged in: ${identity.address}`)
+}
+```
+
+### Logout
+
+```javascript
+await db.sm.clearSecurity()
+console.log("User logged out")
+```
+
+## Silent WebAuthn Resume
+
+The SM automatically attempts silent session resumption on initialization:
+
+- No biometric prompt on page reload
+- Requires previous WebAuthn session on this browser
+- Cleared on logout with `clearSecurity()`
+
+```javascript
+// Initialize - SM handles silent resume automatically
+const db = await gdb("my-db", {
+  rtc: true,
+  sm: { superAdmins: ["0x..."] }
+})
+
+// Check if already logged in
+if (db.sm.isSecurityActive()) {
+  console.log("Already logged in:", db.sm.getActiveEthAddress())
+}
+```
+
+## State Management
+
+### Security State Callback
+
+```javascript
+db.sm.setSecurityStateChangeCallback((state) => {
+  console.log("Security state:", state)
+  
+  if (state.isActive) {
+    // User is logged in
+    console.log("User:", state.abbrAddr) // "0x1234...abcd"
+    console.log("WebAuthn:", state.isWebAuthnProtected)
+  } else {
+    // User is logged out
+    console.log("WebAuthn available:", state.hasWebAuthnHardwareRegistration)
+  }
+})
+```
+
+**State Properties:**
+
+<ResponseField name="isActive" type="boolean">
+  True if user session is active with signing capabilities
+</ResponseField>
+
+<ResponseField name="activeAddress" type="string | null">
+  Ethereum address of active user, or null
+</ResponseField>
+
+<ResponseField name="abbrAddr" type="string">
+  Abbreviated address for display (e.g., "0x1234...abcd")
+</ResponseField>
+
+<ResponseField name="isWebAuthnProtected" type="boolean">
+  True if current session uses WebAuthn
+</ResponseField>
+
+<ResponseField name="hasVolatileIdentity" type="boolean">
+  True if new identity generated but not yet secured
+</ResponseField>
+
+<ResponseField name="hasWebAuthnHardwareRegistration" type="boolean">
+  True if WebAuthn credential exists for this browser
+</ResponseField>
+
+### Helper Methods
+
+```javascript
+// Get active user address
+const address = db.sm.getActiveEthAddress()
+
+// Check if logged in
+const isLoggedIn = db.sm.isSecurityActive()
+
+// Check if WebAuthn session
+const isWebAuthn = db.sm.isCurrentSessionProtectedByWebAuthn()
+
+// Check if WebAuthn available
+const hasWebAuthn = db.sm.hasExistingWebAuthnRegistration()
+
+// Get mnemonic (only for new/recovered identities)
+const mnemonic = db.sm.getMnemonicForDisplayAfterRegistrationOrRecovery()
+
+// Abbreviate address for display
+const short = db.sm.abbrAddr("0x1234567890123456789012345678901234567890")
+// Returns: "0x1234...7890"
+```
+
+## Role-Based Access Control (RBAC)
+
+### Default Roles
+
+```javascript
+{
+  superadmin: { can: ["assignRole", "deleteAny"], inherits: ["admin"] },
+  admin: { can: ["delete"], inherits: ["manager"] },
+  manager: { can: ["publish"], inherits: ["user"] },
+  user: { can: ["write", "link", "sync"], inherits: ["guest"] },
+  guest: { can: ["read", "sync"] }
+}
+```
+
+### Custom Roles
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: true,
+  sm: {
+    superAdmins: ["0x..."],
+    customRoles: {
+      editor: { can: ["write", "publish"], inherits: ["user"] },
+      viewer: { can: ["read"], inherits: ["guest"] }
+    }
+  }
+})
+```
+
+### Assign Roles
+
+```javascript
+// Assign role to user (requires 'assignRole' permission)
+await db.sm.assignRole(
+  "0xTargetUserAddress...",
+  "editor",
+  new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Expires in 30 days (optional)
+)
+```
+
+### Check Permissions
+
+```javascript
+try {
+  const userAddress = await db.sm.executeWithPermission("delete")
+  console.log(`User ${userAddress} has delete permission`)
+  
+  // Proceed with operation
+  await db.remove(nodeId)
+} catch (error) {
+  console.error("Permission denied:", error.message)
+}
+```
+
+## Secure Data Storage
+
+### Encrypted Put/Get
+
+```javascript
+// Store encrypted data (tied to user's identity)
+const id = await db.sm.put(
+  { secret: "confidential data" },
+  "my-secret-note"
+)
+
+// Retrieve and decrypt
+const { result: node } = await db.sm.get("my-secret-note")
+
+if (node && node.decrypted) {
+  console.log("Decrypted:", node.value)
+} else {
+  console.warn("Could not decrypt (not owner or not logged in)")
+}
+```
+
+<Info>
+**Automatic Encryption**: Data stored with `db.sm.put()` is automatically encrypted using a key derived from the active user's Ethereum identity.
+</Info>
+
+## Access Control Lists (ACLs)
+
+For node-level permissions, enable ACLs:
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: true,
+  sm: {
+    superAdmins: ["0x..."],
+    acls: true // Enable ACL module
+  }
+})
+```
+
+See [ACLs Module](/modules/acls) for detailed documentation.
+
+## P2P Security
+
+When SM is enabled, all P2P operations are:
+
+1. **Signed**: Outgoing operations are cryptographically signed
+2. **Verified**: Incoming operations are signature-validated
+3. **Permission-Checked**: Operations are validated against RBAC/ACL rules
+4. **Rejected if Invalid**: Unauthorized operations are discarded
+
+```javascript
+// This operation is automatically signed and verified
+await db.put({ type: "Task", text: "Secure task" })
+
+// Other peers verify:
+// - Valid signature from known user
+// - User has 'write' permission
+// - Operation applies only if both checks pass
+```
+
+## Best Practices
+
+### Registration Flow
+
+```javascript
+class AuthManager {
+  async register() {
+    // 1. Generate identity
+    const identity = await db.sm.startNewUserRegistration()
+    if (!identity) throw new Error("Failed to generate identity")
+    
+    // 2. Show mnemonic to user (CRITICAL)
+    this.displayMnemonic(identity.mnemonic)
+    
+    // 3. User confirms they saved it
+    await this.waitForUserConfirmation()
+    
+    // 4. Protect with WebAuthn
+    const address = await db.sm.protectCurrentIdentityWithWebAuthn(
+      identity.privateKey
+    )
+    
+    if (address) {
+      console.log("Registration complete:", address)
+    }
+  }
+  
+  displayMnemonic(mnemonic) {
+    alert(`SAVE THIS PHRASE: ${mnemonic}`)
+    // In production, use a proper UI with copy button
+  }
+}
+```
+
+### Login Flow
+
+```javascript
+class AuthManager {
+  async login() {
+    // Try WebAuthn first (if available)
+    if (db.sm.hasExistingWebAuthnRegistration()) {
+      const address = await db.sm.loginCurrentUserWithWebAuthn()
+      if (address) return address
+    }
+    
+    // Fall back to mnemonic
+    const mnemonic = prompt("Enter your recovery phrase:")
+    const identity = await db.sm.loginOrRecoverUserWithMnemonic(mnemonic)
+    
+    if (identity) {
+      return identity.address
+    }
+    
+    throw new Error("Login failed")
+  }
+}
+```
+
+### UI State Management
+
+```javascript
+db.sm.setSecurityStateChangeCallback((state) => {
+  // Update UI based on state
+  if (state.isActive) {
+    showLoggedInView(state.abbrAddr)
+    hideLoginButtons()
+  } else {
+    showLoginView()
+    
+    // Show/hide WebAuthn button
+    if (state.hasWebAuthnHardwareRegistration) {
+      showWebAuthnLoginButton()
+    } else {
+      hideWebAuthnLoginButton()
+    }
+  }
+})
+```
+
+## API Reference
+
+For complete method signatures and advanced usage, refer to the SM module documentation in the [GitHub repository](https://github.com/estebanrfp/gdb/blob/main/docs/sm-api-reference.md).
+
+## Related Modules
+
+- [ACLs Module](/modules/acls) - Node-level permissions
+- [Audit Module](/modules/audit) - Content policy enforcement

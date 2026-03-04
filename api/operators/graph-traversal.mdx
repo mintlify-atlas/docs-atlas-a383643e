@@ -1,0 +1,434 @@
+---
+title: 'Graph Traversal Operator ($edge)'
+description: 'Recursive graph traversal for exploring node relationships'
+---
+
+## Overview
+
+The `$edge` operator is one of the most powerful features in GenosDB. It transforms a standard query into a graph exploration tool, enabling recursive traversal of node relationships to find descendants at any depth.
+
+## How It Works
+
+A query with `$edge` has two logical parts:
+
+1. **Starting Point Query**: The main query finds the node(s) from which traversal begins
+2. **Descendant Filter**: The `$edge` sub-query filters all descendants in the graph
+
+The final result contains only the descendant nodes that match the `$edge` criteria, not the starting nodes.
+
+## Basic Syntax
+
+```javascript
+const { results } = await db.map({
+  query: {
+    // Starting point criteria
+    type: "Folder",
+    name: "Documents",
+    
+    // Descendant filter
+    $edge: {
+      type: "File"
+    }
+  }
+})
+```
+
+## Examples
+
+### Find All Files in a Folder
+
+```javascript
+// Create folder structure
+const folderId = await db.put({ type: "Folder", name: "Documents" })
+const fileId1 = await db.put({ type: "File", name: "report.pdf" })
+const fileId2 = await db.put({ type: "File", name: "notes.txt" })
+
+await db.link(folderId, fileId1)
+await db.link(folderId, fileId2)
+
+// Find all files
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Documents",
+    $edge: {
+      type: "File"
+    }
+  }
+})
+
+console.log("Files:", results)
+// Returns: [{ type: "File", name: "report.pdf" }, { type: "File", name: "notes.txt" }]
+```
+
+### Multi-Level Traversal
+
+```javascript
+// Nested folder structure:
+// Root -> Documents -> Work -> Projects
+
+const rootId = await db.put({ type: "Folder", name: "Root" })
+const docsId = await db.put({ type: "Folder", name: "Documents" })
+const workId = await db.put({ type: "Folder", name: "Work" })
+const projectId = await db.put({ type: "File", name: "project.pdf" })
+
+await db.link(rootId, docsId)
+await db.link(docsId, workId)
+await db.link(workId, projectId)
+
+// Find all files at any depth
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Root",
+    $edge: {
+      type: "File"
+    }
+  }
+})
+
+console.log("All files:", results)
+// Returns: [{ type: "File", name: "project.pdf" }]
+```
+
+### Filter Descendants by Properties
+
+```javascript
+// Find only large image files
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Photos",
+    $edge: {
+      type: "File",
+      extension: "jpg",
+      size: { $gt: 1024 * 1024 }  // > 1MB
+    }
+  }
+})
+```
+
+### Complex Descendant Filters
+
+```javascript
+// Find files that are either images OR over 1MB
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Documents",
+    $edge: {
+      type: "File",
+      $or: [
+        { extension: "jpg" },
+        { size: { $gt: 1024 } }
+      ]
+    }
+  }
+})
+```
+
+### Organization Chart - All Employees
+
+```javascript
+// CEO -> Managers -> Employees
+const ceoId = await db.put({ type: "Employee", name: "CEO", role: "Chief Executive" })
+const managerId = await db.put({ type: "Employee", name: "Manager", role: "Engineering Manager" })
+const dev1Id = await db.put({ type: "Employee", name: "Alice", role: "Developer" })
+const dev2Id = await db.put({ type: "Employee", name: "Bob", role: "Developer" })
+
+await db.link(ceoId, managerId)
+await db.link(managerId, dev1Id)
+await db.link(managerId, dev2Id)
+
+// Find all developers under CEO
+const { results } = await db.map({
+  query: {
+    name: "CEO",
+    $edge: {
+      type: "Employee",
+      role: "Developer"
+    }
+  }
+})
+
+console.log("Developers:", results)
+// Returns: [{ name: "Alice", ... }, { name: "Bob", ... }]
+```
+
+### Social Network - All Connections
+
+```javascript
+// Find all users connected to Alice (friends of friends)
+const { results } = await db.map({
+  query: {
+    type: "User",
+    name: "Alice",
+    $edge: {
+      type: "User"
+    }
+  }
+})
+
+console.log("All connected users:", results)
+```
+
+### Product Categories
+
+```javascript
+// Electronics -> Computers -> Laptops -> Products
+
+const electronicsId = await db.put({ type: "Category", name: "Electronics" })
+const computersId = await db.put({ type: "Category", name: "Computers" })
+const laptopsId = await db.put({ type: "Category", name: "Laptops" })
+const product1 = await db.put({ type: "Product", name: "MacBook Pro", price: 2000 })
+const product2 = await db.put({ type: "Product", name: "ThinkPad", price: 1200 })
+
+await db.link(electronicsId, computersId)
+await db.link(computersId, laptopsId)
+await db.link(laptopsId, product1)
+await db.link(laptopsId, product2)
+
+// Find all products under Electronics
+const { results: allProducts } = await db.map({
+  query: {
+    type: "Category",
+    name: "Electronics",
+    $edge: {
+      type: "Product"
+    }
+  }
+})
+
+// Find expensive products only
+const { results: expensive } = await db.map({
+  query: {
+    type: "Category",
+    name: "Electronics",
+    $edge: {
+      type: "Product",
+      price: { $gt: 1500 }
+    }
+  }
+})
+```
+
+### Blog Post with Nested Comments
+
+```javascript
+// Post -> Comments -> Replies
+
+const postId = await db.put({ type: "Post", title: "Hello World" })
+const commentId = await db.put({ type: "Comment", text: "Great post!" })
+const replyId = await db.put({ type: "Comment", text: "I agree!" })
+
+await db.link(postId, commentId)
+await db.link(commentId, replyId)
+
+// Find all comments (including nested replies)
+const { results } = await db.map({
+  query: {
+    id: postId,
+    $edge: {
+      type: "Comment"
+    }
+  }
+})
+
+console.log("All comments:", results)
+// Returns both top-level comments and replies
+```
+
+### Find All Descendants (No Filter)
+
+```javascript
+// Get everything under a node
+const { results } = await db.map({
+  query: {
+    id: rootNodeId,
+    $edge: {}  // Empty filter = all descendants
+  }
+})
+```
+
+### Nested $edge Queries
+
+```javascript
+// Find grandchildren with specific properties
+const { results } = await db.map({
+  query: {
+    type: "Company",
+    $edge: {
+      role: "Developer",
+      $edge: {
+        name: "Bob"
+      }
+    }
+  }
+})
+
+// This finds: Company -> Developer -> Bob
+// Returns only nodes named "Bob" that are descendants of Developers
+```
+
+### Task Dependencies
+
+```javascript
+// Find all subtasks
+const mainTaskId = await db.put({ type: "Task", name: "Build App" })
+const task1 = await db.put({ type: "Task", name: "Design UI", status: "done" })
+const task2 = await db.put({ type: "Task", name: "Backend API", status: "in-progress" })
+const task3 = await db.put({ type: "Task", name: "Testing", status: "pending" })
+
+await db.link(mainTaskId, task1)
+await db.link(mainTaskId, task2)
+await db.link(mainTaskId, task3)
+
+// Find pending subtasks
+const { results } = await db.map({
+  query: {
+    id: mainTaskId,
+    $edge: {
+      type: "Task",
+      status: "pending"
+    }
+  }
+})
+```
+
+### Real-Time Graph Monitoring
+
+```javascript
+// Monitor all files added to a folder hierarchy
+const { unsubscribe } = await db.map(
+  {
+    query: {
+      type: "Folder",
+      name: "Documents",
+      $edge: {
+        type: "File"
+      }
+    }
+  },
+  ({ id, value, action }) => {
+    if (action === "added") {
+      console.log(`New file added: ${value.name}`)
+      notifyUser(value)
+    }
+  }
+)
+```
+
+## Advanced Patterns
+
+### Combined with Other Operators
+
+```javascript
+// Find specific descendants with multiple conditions
+const { results } = await db.map({
+  query: {
+    type: "Project",
+    status: "active",
+    $edge: {
+      type: "Task",
+      $and: [
+        { priority: "high" },
+        { assignee: { $exists: true } },
+        { dueDate: { $lt: Date.now() } }
+      ]
+    }
+  },
+  field: "dueDate",
+  order: "asc"
+})
+```
+
+### Limiting Traversal Results
+
+```javascript
+// Get first 10 descendant files
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Photos",
+    $edge: {
+      type: "File"
+    }
+  },
+  $limit: 10,
+  field: "createdAt",
+  order: "desc"
+})
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="File Systems" icon="folder">
+    Navigate folder hierarchies and find files at any depth
+  </Card>
+  <Card title="Organization Charts" icon="sitemap">
+    Query employee reporting structures and team hierarchies
+  </Card>
+  <Card title="Social Graphs" icon="users">
+    Explore friend networks and social connections
+  </Card>
+  <Card title="Product Catalogs" icon="boxes">
+    Browse nested category structures and products
+  </Card>
+  <Card title="Task Management" icon="tasks">
+    Track task dependencies and subtasks
+  </Card>
+  <Card title="Knowledge Graphs" icon="brain">
+    Navigate concept relationships and dependencies
+  </Card>
+</CardGroup>
+
+## Performance Considerations
+
+<Info>
+**Efficient Traversal**: GenosDB optimizes graph traversal by:
+- Indexing edges for fast lookups
+- Caching frequently accessed nodes
+- Short-circuiting when descendant filters don't match
+</Info>
+
+<Warning>
+**Deep Hierarchies**: For very deep graphs (100+ levels), consider:
+- Adding depth limits to your queries
+- Breaking up queries into smaller chunks
+- Using pagination with `$limit`
+</Warning>
+
+## Comparison with SQL
+
+In SQL, this type of recursive query requires complex CTEs (Common Table Expressions):
+
+```sql
+-- SQL equivalent (complex)
+WITH RECURSIVE descendants AS (
+  SELECT * FROM nodes WHERE id = 'root'
+  UNION ALL
+  SELECT n.* FROM nodes n
+  INNER JOIN edges e ON n.id = e.target
+  INNER JOIN descendants d ON e.source = d.id
+)
+SELECT * FROM descendants WHERE type = 'File';
+```
+
+GenosDB makes this simple:
+
+```javascript
+// GenosDB (simple)
+const { results } = await db.map({
+  query: {
+    id: 'root',
+    $edge: { type: 'File' }
+  }
+})
+```
+
+## Related Operators
+
+- [Comparison Operators](/api/operators/comparison) - Filter descendants
+- [Logical Operators](/api/operators/logical) - Combine filters
+- [link()](/api/link) - Create edges for traversal

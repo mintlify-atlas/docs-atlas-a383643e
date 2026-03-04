@@ -1,0 +1,296 @@
+---
+title: "Cells Topology"
+description: "Deep dive into cellular mesh topology and peer organization"
+---
+
+The Cellular Mesh topology is an advanced P2P architecture that organizes peers into logical cells connected by bridge nodes, enabling massive scalability.
+
+<Info>
+For a complete guide including API usage, see [Cellular Mesh](/advanced/cellular-mesh).
+</Info>
+
+## Topology Overview
+
+Traditional mesh networks create O(N²) connections. Cellular mesh reduces this to O(N) through strategic peer organization.
+
+### Cell Assignment Algorithm
+
+Peers are deterministically assigned to cells based on a sorted roster:
+
+```javascript
+// Sorted roster (alphabetically by peer ID)
+const roster = [
+  'peer-alpha',
+  'peer-beta',
+  'peer-charlie',
+  'peer-delta',
+  'peer-echo',
+  'peer-foxtrot',
+  'peer-golf',
+  'peer-hotel',
+  'peer-india'
+];
+
+const cellSize = 3;
+
+// Assignment function
+function assignCell(peerId) {
+  const index = roster.indexOf(peerId);
+  const cellIndex = Math.floor(index / cellSize);
+  return `cell-${cellIndex}`;
+}
+
+// Result:
+// cell-0: [alpha, beta, charlie]
+// cell-1: [delta, echo, foxtrot]
+// cell-2: [golf, hotel, india]
+```
+
+### Network Structure
+
+```
+┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+│   cell-0     │ ◄─────► │   cell-1     │ ◄─────► │   cell-2     │
+│              │ bridges │              │ bridges │              │
+│ • alpha      │         │ • delta      │         │ • golf       │
+│ • beta   ●───┼─────────┼───● echo     │         │ • hotel      │
+│ • charlie    │         │ • foxtrot    │         │ • india      │
+└──────────────┘         └──────────────┘         └──────────────┘
+      ▲                                                    ▲
+      │                                                    │
+      └────────────────────────────────────────────────────┘
+                      inter-cell bridges
+```
+
+## Bridge Selection
+
+Bridges are peers elected to maintain connections between adjacent cells.
+
+### Edge Group Selection
+
+```javascript
+function selectBridges(cellA, cellB, roster, cellSize, bridgesPerEdge) {
+  // Get all peers at the boundary between two cells
+  const minCell = Math.min(cellA, cellB);
+  const maxCell = Math.max(cellA, cellB);
+  
+  const edgeGroup = roster.slice(
+    minCell * cellSize,
+    (maxCell + 1) * cellSize
+  );
+  
+  // Sort by health score (descending)
+  const sortedByHealth = edgeGroup
+    .map(peerId => ({
+      peerId,
+      health: getHealthScore(peerId)
+    }))
+    .sort((a, b) => b.health - a.health);
+  
+  // Select top N as bridges
+  return sortedByHealth
+    .slice(0, bridgesPerEdge)
+    .map(peer => peer.peerId);
+}
+```
+
+### Health Score Calculation
+
+```javascript
+function calculateHealthScore(metrics) {
+  // RTT score: Lower is better (normalized 0-1)
+  const rttScore = metrics.avgRtt === Infinity ? 0 : 
+    Math.max(0, 1 - (metrics.avgRtt / 1000));
+  
+  // Uptime score: Longer is better (normalized 0-1)
+  const uptimeScore = Math.min(1, metrics.uptime / (60 * 60 * 1000));
+  
+  // Stability score: Fewer reconnections is better
+  const stabilityScore = Math.max(0, 1 - (metrics.reconnects * 0.1));
+  
+  // Responsiveness score: Boolean 0 or 1
+  const responsivenessScore = metrics.isResponsive ? 1 : 0;
+  
+  // Weighted composite
+  return (
+    rttScore * 0.25 +
+    uptimeScore * 0.25 +
+    stabilityScore * 0.30 +
+    responsivenessScore * 0.20
+  );
+}
+```
+
+## Message Routing
+
+### Intra-Cell Routing
+
+Messages within a cell are delivered directly via full mesh:
+
+```javascript
+// All peers in cell-0 are connected to each other
+cell-0: alpha ◄──► beta ◄──► charlie
+```
+
+### Inter-Cell Routing
+
+Messages between cells hop through bridges:
+
+```javascript
+// Message from alpha (cell-0) to hotel (cell-2)
+alpha → bridge-01 → bridge-12 → hotel
+
+// Route: cell-0 → cell-1 → cell-2
+// Hops: 3
+```
+
+### TTL-Based Propagation
+
+```javascript
+function calculateDynamicTTL(roster, cellSize) {
+  const totalCells = Math.ceil(roster.length / cellSize);
+  return Math.min(150, totalCells + 3);
+}
+
+// Broadcast message routing
+function routeMessage(message) {
+  if (message.ttl <= 0) {
+    return; // Drop message
+  }
+  
+  // Check if already seen
+  if (seenMessages.has(message.id)) {
+    return; // Deduplicate
+  }
+  
+  seenMessages.add(message.id);
+  
+  // Deliver locally if in my cell
+  if (message.originCell === myCell || isAdjacentCell(message.originCell)) {
+    deliverToLocalHandlers(message);
+  }
+  
+  // Forward to bridges if I'm a bridge
+  if (isBridge) {
+    const newMessage = {
+      ...message,
+      ttl: message.ttl - 1
+    };
+    
+    forwardToBridgedCells(newMessage);
+  }
+}
+```
+
+## Scalability Analysis
+
+### Connection Count Formula
+
+```
+total_connections ≈ (peers × cellSize) + (cells × bridgesPerEdge × 2)
+```
+
+### Comparison Table
+
+| Peers | Cell Size | Cells | Bridges | Cell Connections | Bridge Connections | Total | Traditional Mesh |
+|-------|-----------|-------|---------|------------------|-------------------|-------|------------------|
+| 100 | 10 | 10 | 2 | 1,000 | 36 | ~1,036 | ~4,950 |
+| 1,000 | 10 | 100 | 2 | 10,000 | 396 | ~10,396 | ~499,500 |
+| 10,000 | 50 | 200 | 2 | 50,000 | 796 | ~50,796 | ~49,995,000 |
+
+<Card title="Massive Efficiency" icon="rocket">
+  At 10,000 peers, cellular mesh uses **1,000x fewer connections** than traditional mesh!
+</Card>
+
+### Hop Count Analysis
+
+Average hops for a message to traverse the network:
+
+```
+avg_hops ≈ √(total_cells)
+max_hops ≈ total_cells (worst case: opposite ends)
+```
+
+| Peers | Cells | Avg Hops | Max Hops |
+|-------|-------|----------|----------|
+| 100 | 10 | ~3 | 10 |
+| 1,000 | 100 | ~10 | 100 |
+| 10,000 | 200 | ~14 | 150 (capped) |
+
+## Failure Scenarios and Resilience
+
+### Bridge Failure
+
+```
+cell-0 ──┬──► cell-1
+         │
+         └──► (redundant bridge)
+```
+
+With `bridgesPerEdge = 2`, if one bridge fails:
+
+1. Remaining bridge continues forwarding
+2. Next heartbeat detects failure
+3. New bridge is elected from edge group
+4. Network self-heals within 5-10 seconds
+
+### Cell Partitioning
+
+If an entire cell goes offline:
+
+```
+cell-0 ◄──► cell-1 ◄─X─► cell-2 ◄──► cell-3
+                          (offline)
+```
+
+- Messages from cell-0 can still reach cell-1
+- Messages cannot reach cell-2 directly
+- Messages can reach cell-3 via alternative paths (if ring topology)
+
+Current implementation uses linear topology, so partitioning can split the network. Future versions may implement ring or graph topologies for enhanced resilience.
+
+## Optimization Strategies
+
+### Dynamic Cell Sizing
+
+```javascript
+function computeOptimalCellSize(peerCount, targetCells, maxCellSize) {
+  if (peerCount < 10) return 2; // Minimum
+  
+  const computed = Math.ceil(peerCount / targetCells);
+  return Math.max(2, Math.min(maxCellSize, computed));
+}
+
+// Automatically adjusts as network grows
+// Triggered on peer join/leave events
+```
+
+### Bridge Redundancy
+
+```javascript
+// More bridges = more resilience, but higher connection cost
+bridgesPerEdge: 1  // Minimal (risky)
+bridgesPerEdge: 2  // Balanced (recommended)
+bridgesPerEdge: 3  // High resilience
+```
+
+### Health-Based Re-Election
+
+Bridges are continuously monitored. If a bridge's health score drops below threshold:
+
+```javascript
+if (bridgeHealth < 0.5) {
+  electNewBridge(cellA, cellB);
+}
+```
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Cellular Mesh" icon="hexagon" href="/advanced/cellular-mesh">
+    Complete cellular mesh guide
+  </Card>
+  <Card title="GenosRTC Architecture" icon="satellite-dish" href="/advanced/p2p/genosrtc-architecture">
+    P2P networking overview
+  </Card>
+</CardGroup>

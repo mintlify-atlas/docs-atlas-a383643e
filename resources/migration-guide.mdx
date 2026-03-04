@@ -1,0 +1,227 @@
+---
+title: "Migration Guide"
+description: "Migrate from new GDB() to await gdb() factory function"
+---
+
+This guide helps you migrate from the class-based API (`new GDB()`) to the new async factory function (`await gdb()`). It covers key changes, before/after examples, and common pitfalls.
+
+## Key Changes
+
+<CardGroup cols={2}>
+  <Card title="Async Initialization" icon="hourglass-start">
+    Must use `await gdb(name, options)` instead of `new GDB()`
+  </Card>
+  <Card title="Stable API" icon="check">
+    Public operations (`put`, `get`, `map`, etc.) remain unchanged
+  </Card>
+  <Card title="Internal Access" icon="gears">
+    `hybridClock`, `graph`, `syncChannel` exposed for module compatibility
+  </Card>
+  <Card title="Better Errors" icon="triangle-exclamation">
+    Using `new GDB()` throws error with migration instructions
+  </Card>
+</CardGroup>
+
+## Quick Migration
+
+### Basic Initialization
+
+<CodeGroup>
+```javascript Before
+import { GDB } from 'gdb';
+const db = new GDB('my-db');
+```
+
+```javascript After
+import { gdb } from 'gdb';
+const db = await gdb('my-db', { rtc: true });
+```
+</CodeGroup>
+
+### Using `map` (Real-Time Subscription)
+
+```javascript
+// Same API, just ensure async initialization
+const { unsubscribe } = await db.map(({ id, value, action }) => {
+  console.log('Node updated:', id, value);
+});
+```
+
+### Using `get` (Point-in-Time and Reactive)
+
+```javascript
+// No signature changes
+const { result } = await db.get(nodeId);
+
+// Or reactive
+const { unsubscribe } = await db.get(nodeId, (node) => {
+  console.log('Node changed:', node);
+});
+```
+
+### Write and Delete
+
+```javascript
+// Unchanged
+await db.put({ text: 'hello' });
+await db.remove(nodeId);
+```
+
+## Security Manager (SM) Integration
+
+### Recommended Initialization
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: true,
+  sm: {
+    superAdmins: ["0x1234...", "0x5678..."]
+  }
+});
+
+const sm = db.sm; // Access Security Manager
+```
+
+<Info>
+The `sm` object is injected when passing `{ sm: { superAdmins: [...] } }`. Access it via `db.sm`.
+</Info>
+
+### Permission Check Example
+
+```javascript
+const activeAddress = sm.getActiveEthAddress();
+if (!activeAddress) {
+  throw new Error('Login required');
+}
+
+// Validate permission before operation
+await sm.executeWithPermission('delete');
+await db.remove(nodeId);
+```
+
+## Browser Usage (ESM)
+
+<CodeGroup>
+```html Local Bundle
+<script type="module">
+  import { gdb } from "../dist/index.js";
+  
+  const db = await gdb('mydb', { rtc: true });
+</script>
+```
+
+```html NPM Package
+<script type="module">
+  import { gdb } from 'genosdb';
+  
+  const db = await gdb('mydb', { rtc: true });
+</script>
+```
+
+```html CDN
+<script type="module">
+  import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
+  
+  const db = await gdb('mydb', { rtc: true });
+</script>
+```
+</CodeGroup>
+
+## Common Pitfalls
+
+<AccordionGroup>
+  <Accordion title="Error: db.map is not a function">
+    **Cause**: Using `db` before initialization completes
+    
+    **Fix**:
+    ```javascript
+    // Wrong
+    const db = gdb('name'); // Missing await!
+    await db.map(...); // Error!
+    
+    // Correct
+    const db = await gdb('name');
+    await db.map(...);
+    ```
+  </Accordion>
+  
+  <Accordion title="SM Error: Cannot read properties of undefined">
+    **Cause**: Module expected `db.hybridClock` which was not exposed in old versions
+    
+    **Status**: Fixed in current version. `hybridClock`, `graph`, and `syncChannel` are exposed as getters.
+  </Accordion>
+  
+  <Accordion title="map doesn't emit after loading graph">
+    **Cause**: Not awaiting initialization or incorrect query filters
+    
+    **Fix**:
+    - Ensure `await gdb(...)` before `db.map(...)`
+    - Check your `query` filter isn't too restrictive
+  </Accordion>
+</AccordionGroup>
+
+## Migration Checklist
+
+<Steps>
+  <Step title="Replace all new GDB()">
+    Change every `new GDB(name, options)` to `await gdb(name, options)`
+  </Step>
+  <Step title="Ensure async/await">
+    Make sure first use of `db` happens after `await gdb(...)`
+  </Step>
+  <Step title="Configure Security Manager">
+    If using SM, initialize with `{ sm: { superAdmins: ['0x...'] } }`
+  </Step>
+  <Step title="Review RBAC actions">
+    Use standardized actions: `read`, `write`, `link`, `sync`, `delete`, `assignRole`
+  </Step>
+  <Step title="Test end-to-end">
+    Verify: initial load, `put`, update, `remove`, `link`, and P2P sync
+  </Step>
+</Steps>
+
+## Full Example (To-Do List)
+
+<CodeGroup>
+```html Before
+<script type="module">
+  import { GDB } from "../dist/index.js";
+  const db = new GDB('todoList');
+  
+  const { unsubscribe } = await db.map(({ id, value, action }) => {
+    renderTodo(id, value, action);
+  });
+</script>
+```
+
+```html After
+<script type="module">
+  import { gdb } from "../dist/index.js";
+  const db = await gdb('todoList', { rtc: true });
+  
+  const { unsubscribe } = await db.map(({ id, value, action }) => {
+    renderTodo(id, value, action);
+  });
+</script>
+```
+</CodeGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Can I still use db.ready?">
+    It may exist in some contexts for legacy compatibility, but it's not recommended. Prefer `await gdb(...)`.
+  </Accordion>
+  
+  <Accordion title="Did map or get signatures change?">
+    No. They still return `{ results, unsubscribe }` or `{ result, unsubscribe }` accordingly.
+  </Accordion>
+  
+  <Accordion title="How do I filter and order in map?">
+    Use options: `{ query: {...}, field: 'timestamp', order: 'asc'|'desc', $limit, $after, $before }`
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+Need help? Open an issue on GitHub with before/after code and the observed error.
+</Note>

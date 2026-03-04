@@ -1,0 +1,524 @@
+---
+title: Building a Chat App
+description: Create a real-time P2P chat application with GenosDB in just 9 lines of code
+---
+
+## Overview
+
+This tutorial demonstrates GenosDB's simplicity by building a fully functional real-time chat application in **9 lines of code**. The app features:
+
+- Real-time messaging
+- P2P synchronization (no backend needed)
+- Persistent message history
+- Cross-device sync
+
+<Tip>
+View the [live demo](https://estebanrfp.github.io/gdb/examples/chat.html) or see the [full source code](https://github.com/estebanrfp/gdb/blob/main/examples/chat.html).
+</Tip>
+
+## The Complete Code
+
+Here's the entire chat application:
+
+```html
+<!DOCTYPE html>
+<ul id='list'></ul>
+<form id='form'>
+  <input id='who' placeholder='name'>
+  <input id='what' placeholder='say'>
+  <input type='submit' value='send'>
+</form>
+<script type="module">
+  import { gdb } from "https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js"
+  
+  let db = await gdb('chat9linescode', { rtc: true })
+  
+  db.map(({ id, value }) => {
+    (view.line = view.getElementById(id) || view.createElement("li")).id = id
+    list.appendChild(view.line).innerText = value.msg
+    window.scroll(0, list.offsetHeight)
+  })
+  
+  form.onsubmit = (eve) => {
+    db.put({ msg: who.value + ': ' + what.value })
+    eve.preventDefault(what.value = "")
+  }
+</script>
+```
+
+<Warning>
+This minimalist version prioritizes brevity over best practices. See the [enhanced version](#enhanced-chat-application) below for production-ready code.
+</Warning>
+
+## How It Works
+
+Let's break down each part:
+
+### 1. HTML Structure
+
+```html
+<ul id='list'></ul>
+<form id='form'>
+  <input id='who' placeholder='name'>
+  <input id='what' placeholder='say'>
+  <input type='submit' value='send'>
+</form>
+```
+
+- `<ul id='list'>`: Container for chat messages
+- `<input id='who'>`: Username input
+- `<input id='what'>`: Message input
+- `<input type='submit'>`: Send button
+
+### 2. Initialize GenosDB
+
+```javascript
+import { gdb } from "https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js"
+
+let db = await gdb('chat9linescode', { rtc: true })
+```
+
+- Imports GenosDB from CDN
+- Creates database named `'chat9linescode'` (the room name)
+- Enables P2P with `{ rtc: true }`
+
+<Info>
+All users connecting to `'chat9linescode'` will join the same chat room automatically.
+</Info>
+
+### 3. Display Messages
+
+```javascript
+db.map(({ id, value }) => {
+  (view.line = view.getElementById(id) || view.createElement("li")).id = id
+  list.appendChild(view.line).innerText = value.msg
+  window.scroll(0, list.offsetHeight)
+})
+```
+
+This single `map()` call:
+- Subscribes to all messages (no query filter)
+- Creates or updates `<li>` elements for each message
+- Auto-scrolls to the latest message
+- Fires for initial messages and all future changes
+
+### 4. Send Messages
+
+```javascript
+form.onsubmit = (eve) => {
+  db.put({ msg: who.value + ': ' + what.value })
+  eve.preventDefault(what.value = "")
+}
+```
+
+On form submit:
+- Creates a new message with `db.put()`
+- Prevents page reload
+- Clears the message input
+
+## Enhanced Chat Application
+
+For production use, here's an improved version with better UX:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenosDB Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    
+    #messages {
+      border: 1px solid #ddd;
+      height: 400px;
+      overflow-y: auto;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #f9f9f9;
+    }
+    
+    .message {
+      margin-bottom: 10px;
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+      word-wrap: break-word;
+    }
+    
+    .message .username {
+      font-weight: bold;
+      color: #0066cc;
+      margin-right: 8px;
+    }
+    
+    .message .timestamp {
+      font-size: 0.8em;
+      color: #999;
+      float: right;
+    }
+    
+    #chat-form {
+      display: flex;
+      gap: 10px;
+    }
+    
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #0052a3;
+    }
+    
+    #username-input {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>GenosDB Chat Room</h2>
+  
+  <div id="username-input">
+    <input type="text" id="username" placeholder="Enter your name" />
+    <button onclick="setUsername()">Set Name</button>
+  </div>
+  
+  <div id="messages"></div>
+  
+  <form id="chat-form">
+    <input type="text" id="message" placeholder="Type a message..." disabled />
+    <button type="submit" disabled>Send</button>
+  </form>
+  
+  <script type="module">
+    import { gdb } from "https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js"
+    
+    const db = await gdb('enhanced-chat', { rtc: true })
+    const messagesContainer = document.getElementById('messages')
+    const messageInput = document.getElementById('message')
+    const chatForm = document.getElementById('chat-form')
+    const usernameInput = document.getElementById('username')
+    
+    let currentUsername = localStorage.getItem('chatUsername') || ''
+    
+    // Set username from localStorage if available
+    if (currentUsername) {
+      usernameInput.value = currentUsername
+      enableChat()
+    }
+    
+    window.setUsername = function() {
+      const name = usernameInput.value.trim()
+      if (!name) {
+        alert('Please enter a name')
+        return
+      }
+      currentUsername = name
+      localStorage.setItem('chatUsername', name)
+      enableChat()
+    }
+    
+    function enableChat() {
+      messageInput.disabled = false
+      chatForm.querySelector('button').disabled = false
+      usernameInput.disabled = true
+      document.querySelector('#username-input button').disabled = true
+      messageInput.focus()
+    }
+    
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp)
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+    
+    function addMessage(id, { username, text, timestamp }) {
+      const existing = document.getElementById(id)
+      if (existing) return // Message already displayed
+      
+      const messageEl = document.createElement('div')
+      messageEl.id = id
+      messageEl.className = 'message'
+      messageEl.innerHTML = `
+        <span class="username">${username}:</span>
+        ${text}
+        <span class="timestamp">${formatTimestamp(timestamp)}</span>
+      `
+      messagesContainer.appendChild(messageEl)
+      messagesContainer.scrollTop = messagesContainer.scrollHeight
+    }
+    
+    // Subscribe to messages
+    const { unsubscribe } = await db.map(
+      { query: { type: 'message' } },
+      ({ id, value, action }) => {
+        if (action === 'initial' || action === 'added') {
+          addMessage(id, value)
+        }
+      }
+    )
+    
+    // Send message
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      
+      const text = messageInput.value.trim()
+      if (!text || !currentUsername) return
+      
+      await db.put({
+        type: 'message',
+        username: currentUsername,
+        text: text,
+        timestamp: Date.now()
+      })
+      
+      messageInput.value = ''
+    })
+    
+    // Send on Enter key (submit on Enter, new line on Shift+Enter)
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        chatForm.requestSubmit()
+      }
+    })
+  </script>
+</body>
+</html>
+```
+
+## Key Improvements
+
+<CardGroup cols={2}>
+  <Card title="Username Management" icon="user">
+    - Persistent username (localStorage)
+    - Username input validation
+    - Disabled chat until name is set
+  </Card>
+  
+  <Card title="Message Formatting" icon="message">
+    - Separate username and text
+    - Timestamps on each message
+    - Clean, card-based design
+  </Card>
+  
+  <Card title="Better UX" icon="star">
+    - Auto-scroll to latest message
+    - Prevent duplicate messages
+    - Enter to send, Shift+Enter for new line
+  </Card>
+  
+  <Card title="Query Filtering" icon="filter">
+    - Filter for `type: 'message'`
+    - Prevents non-message nodes from appearing
+    - Better data organization
+  </Card>
+</CardGroup>
+
+## Adding Features
+
+### 1. User Presence
+
+Show who's online:
+
+```javascript
+const PRESENCE_ID = `presence:${currentUsername}`
+
+// Update presence every 5 seconds
+setInterval(async () => {
+  await db.put({
+    type: 'presence',
+    username: currentUsername,
+    lastSeen: Date.now()
+  }, PRESENCE_ID)
+}, 5000)
+
+// Display online users
+await db.map(
+  { query: { type: 'presence' } },
+  ({ value }) => {
+    const isOnline = Date.now() - value.lastSeen < 10000 // Active within 10s
+    updateUserList(value.username, isOnline)
+  }
+)
+```
+
+### 2. Typing Indicators
+
+Show "User is typing..." with data channels:
+
+```javascript
+const typingChannel = db.room.channel('typing')
+
+messageInput.addEventListener('input', () => {
+  typingChannel.send({ username: currentUsername, typing: true })
+})
+
+typingChannel.on('message', ({ username, typing }, peerId) => {
+  showTypingIndicator(username, typing)
+})
+```
+
+### 3. Message Reactions
+
+```javascript
+async function addReaction(messageId, emoji) {
+  const { result: msg } = await db.get(messageId)
+  
+  const reactions = msg.value.reactions || {}
+  reactions[emoji] = (reactions[emoji] || 0) + 1
+  
+  await db.put({
+    ...msg.value,
+    reactions
+  }, messageId)
+}
+
+// In message display
+if (value.reactions) {
+  Object.entries(value.reactions).forEach(([emoji, count]) => {
+    // Display emoji with count
+  })
+}
+```
+
+### 4. Private Rooms
+
+Create topic-based rooms:
+
+```javascript
+const roomName = window.location.hash.slice(1) || 'general'
+const db = await gdb(`chat:${roomName}`, { rtc: true })
+
+// Users in same room (same URL hash) will chat together
+// Example: example.com/chat.html#gaming
+```
+
+## RBAC Chat Example
+
+For a chat with role-based permissions, see the [RBAC Chat Example](https://estebanrfp.github.io/gdb/examples/chatrbac.html):
+
+```javascript
+const db = await gdb('secure-chat', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0x1234...'],
+    customRoles: {
+      moderator: {
+        can: ['delete'],  // Can delete messages
+        inherits: ['user']
+      }
+    }
+  }
+})
+
+// Users must authenticate
+await db.sm.loginCurrentUserWithWebAuthn()
+
+// Only moderators/admins can delete
+async function deleteMessage(id) {
+  await db.remove(id)  // Automatically enforced by SM
+}
+```
+
+## Testing Cross-Device Sync
+
+<Steps>
+  <Step title="Open on Desktop">
+    Open the chat on your computer.
+  </Step>
+  
+  <Step title="Open on Mobile">
+    Open the same URL on your phone (ensure both devices are online).
+  </Step>
+  
+  <Step title="Send Messages">
+    Messages sent from either device appear instantly on both!
+  </Step>
+  
+  <Step title="Test Offline">
+    Disconnect one device, send messages. When reconnected, they sync automatically.
+  </Step>
+</Steps>
+
+## Performance Considerations
+
+For high-traffic chat rooms:
+
+### Pagination
+
+```javascript
+// Load only recent messages
+const { results } = await db.map({
+  query: { type: 'message' },
+  field: 'timestamp',
+  order: 'desc',
+  $limit: 50  // Last 50 messages
+})
+```
+
+### Message Expiration
+
+```javascript
+// Auto-delete old messages
+const ONE_DAY = 24 * 60 * 60 * 1000
+
+const { results: oldMessages } = await db.map({
+  query: {
+    type: 'message',
+    timestamp: { $lt: Date.now() - ONE_DAY }
+  }
+})
+
+for (const msg of oldMessages) {
+  await db.remove(msg.id)
+}
+```
+
+### Cellular Mesh for Large Rooms
+
+```javascript
+// For 100+ concurrent users
+const db = await gdb('massive-chat', {
+  rtc: { cells: true }
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Collaborative Editor" icon="file-pen" href="/examples/collaborative-editor">
+    Build a real-time collaborative text editor
+  </Card>
+  
+  <Card title="Real-Time Subscriptions" icon="bell" href="/guides/real-time-subscriptions">
+    Master reactive queries
+  </Card>
+  
+  <Card title="P2P Setup" icon="network-wired" href="/guides/p2p-setup">
+    Configure relays and TURN servers
+  </Card>
+  
+  <Card title="Security Model" icon="shield" href="/concepts/security-model">
+    Add authentication and permissions
+  </Card>
+</CardGroup>

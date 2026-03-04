@@ -1,0 +1,449 @@
+---
+title: 'GenosRTC - P2P Communication'
+description: 'Real-time peer-to-peer messaging, data channels, and media streaming'
+---
+
+## Overview
+
+GenosRTC is the internal P2P module powering GenosDB's real-time capabilities. It's exposed via `db.room` and provides WebRTC-based communication for:
+
+- **Data Channels**: Send any type of data between peers
+- **Media Streams**: Share audio/video directly
+- **Peer Management**: Track connections and latency
+- **Cellular Mesh**: Scale to massive peer counts
+
+<Note>
+GenosRTC is automatically available when you enable `rtc: true` during database initialization. No separate import required.
+</Note>
+
+## Getting Started
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db", { rtc: true })
+
+// Access the room object
+const room = db.room
+
+console.log("P2P communication ready")
+```
+
+## Peer Events
+
+### peer:join
+
+Fires when a peer joins the room.
+
+```javascript
+db.room.on("peer:join", (peerId) => {
+  console.log(`Peer ${peerId} joined`)
+  updatePeerList()
+})
+```
+
+### peer:leave
+
+Fires when a peer disconnects.
+
+```javascript
+db.room.on("peer:leave", (peerId) => {
+  console.log(`Peer ${peerId} left`)
+  removePeerFromUI(peerId)
+})
+```
+
+### stream:add
+
+Fires when a peer sends a media stream.
+
+```javascript
+db.room.on("stream:add", (stream, peerId, metadata) => {
+  console.log(`Receiving stream from ${peerId}`)
+  
+  // Display in video element
+  const video = document.createElement("video")
+  video.srcObject = stream
+  video.autoplay = true
+  document.body.appendChild(video)
+})
+```
+
+## Data Channels
+
+### Create a Channel
+
+```javascript
+const channel = db.room.channel("chat")
+```
+
+<ParamField path="type" type="string" required>
+  Channel identifier in UTF-8 (max 12 bytes)
+</ParamField>
+
+### Send Data
+
+```javascript
+// Send to all peers
+channel.send({ message: "Hello everyone!" })
+
+// Send to specific peer
+channel.send({ message: "Private message" }, "peer-123")
+
+// Send to multiple peers
+channel.send({ data: "update" }, ["peer-1", "peer-2", "peer-3"])
+```
+
+### Receive Data
+
+```javascript
+channel.on("message", (data, peerId) => {
+  console.log(`From ${peerId}:`, data)
+})
+```
+
+## Examples
+
+### Chat Application
+
+```javascript
+class P2PChat {
+  constructor(db, username) {
+    this.db = db
+    this.username = username
+    this.channel = db.room.channel("chat")
+    
+    this.setupListeners()
+  }
+  
+  setupListeners() {
+    // Listen for messages
+    this.channel.on("message", (data, peerId) => {
+      this.displayMessage(data.username, data.text)
+    })
+    
+    // Track peers
+    this.db.room.on("peer:join", (peerId) => {
+      this.displaySystemMessage(`${peerId} joined`)
+    })
+    
+    this.db.room.on("peer:leave", (peerId) => {
+      this.displaySystemMessage(`${peerId} left`)
+    })
+  }
+  
+  sendMessage(text) {
+    this.channel.send({
+      username: this.username,
+      text,
+      timestamp: Date.now()
+    })
+    
+    // Display locally
+    this.displayMessage(this.username, text)
+  }
+  
+  displayMessage(username, text) {
+    const msg = document.createElement("div")
+    msg.textContent = `${username}: ${text}`
+    document.getElementById("messages").appendChild(msg)
+  }
+  
+  displaySystemMessage(text) {
+    const msg = document.createElement("div")
+    msg.textContent = text
+    msg.style.color = "gray"
+    document.getElementById("messages").appendChild(msg)
+  }
+}
+
+// Usage
+const chat = new P2PChat(db, "Alice")
+chat.sendMessage("Hello everyone!")
+```
+
+### Cursor Sharing
+
+```javascript
+const cursorChannel = db.room.channel("cursors")
+const cursors = new Map()
+
+// Send cursor position
+window.addEventListener("mousemove", (e) => {
+  cursorChannel.send({
+    x: e.clientX,
+    y: e.clientY
+  })
+})
+
+// Receive and render other cursors
+cursorChannel.on("message", (position, peerId) => {
+  if (!cursors.has(peerId)) {
+    const cursor = document.createElement("div")
+    cursor.className = "remote-cursor"
+    document.body.appendChild(cursor)
+    cursors.set(peerId, cursor)
+  }
+  
+  const cursor = cursors.get(peerId)
+  cursor.style.left = position.x + "px"
+  cursor.style.top = position.y + "px"
+})
+
+// Clean up when peer leaves
+db.room.on("peer:leave", (peerId) => {
+  const cursor = cursors.get(peerId)
+  if (cursor) {
+    cursor.remove()
+    cursors.delete(peerId)
+  }
+})
+```
+
+### Game State Synchronization
+
+```javascript
+const gameChannel = db.room.channel("game-state")
+
+class MultiplayerGame {
+  constructor(db) {
+    this.channel = db.room.channel("game")
+    this.players = new Map()
+    
+    this.channel.on("message", (data, peerId) => {
+      this.updatePlayer(peerId, data)
+    })
+  }
+  
+  updateLocalPlayer(x, y, action) {
+    const state = { x, y, action, timestamp: Date.now() }
+    
+    // Send to all peers
+    this.channel.send(state)
+    
+    // Update locally
+    this.renderPlayer("local", state)
+  }
+  
+  updatePlayer(peerId, state) {
+    this.players.set(peerId, state)
+    this.renderPlayer(peerId, state)
+  }
+  
+  renderPlayer(id, state) {
+    // Render player at position
+    console.log(`Player ${id} at (${state.x}, ${state.y})`, state.action)
+  }
+}
+```
+
+## Media Streaming
+
+### Send Webcam Stream
+
+```javascript
+async function startWebcam() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    })
+    
+    // Display local preview
+    const localVideo = document.getElementById("local-video")
+    localVideo.srcObject = stream
+    
+    // Send to all peers
+    db.room.addStream(stream)
+    
+    console.log("Streaming webcam")
+  } catch (error) {
+    console.error("Failed to access webcam:", error)
+  }
+}
+```
+
+### Receive Streams
+
+```javascript
+db.room.on("stream:add", (stream, peerId, metadata) => {
+  console.log(`Stream from ${peerId}:`, metadata)
+  
+  // Create video element
+  const video = document.createElement("video")
+  video.srcObject = stream
+  video.autoplay = true
+  video.muted = false
+  video.id = `video-${peerId}`
+  
+  document.getElementById("remote-videos").appendChild(video)
+})
+```
+
+### Stop Streaming
+
+```javascript
+// Stop sending a stream
+db.room.removeStream(localStream)
+
+// Or stop all tracks
+localStream.getTracks().forEach(track => track.stop())
+```
+
+### Screen Sharing
+
+```javascript
+async function shareScreen() {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true
+    })
+    
+    db.room.addStream(stream, null, { type: "screen" })
+    
+    console.log("Sharing screen")
+  } catch (error) {
+    console.error("Screen sharing failed:", error)
+  }
+}
+```
+
+## Peer Management
+
+### Get Connected Peers
+
+```javascript
+const peers = db.room.getPeers()
+
+console.log(`Connected to ${peers.size} peers`)
+
+for (const [peerId, connection] of peers) {
+  console.log(`Peer ${peerId}:`, connection.connectionState)
+}
+```
+
+### Measure Latency
+
+```javascript
+const latency = await db.room.ping("peer-123")
+
+console.log(`Latency to peer: ${latency}ms`)
+```
+
+### Leave Room
+
+```javascript
+db.room.leave()
+
+console.log("Disconnected from all peers")
+```
+
+## Cellular Mesh Network
+
+For massive scalability (100+ peers), enable the Cellular Mesh overlay:
+
+```javascript
+const db = await gdb("my-app", {
+  rtc: {
+    cells: true // Enable with defaults
+  }
+})
+
+// Or with custom configuration
+const db = await gdb("my-app", {
+  rtc: {
+    cells: {
+      cellSize: "auto",
+      bridgesPerEdge: 2,
+      maxCellSize: 50,
+      targetCells: 100,
+      debug: false
+    }
+  }
+})
+```
+
+### Mesh API
+
+```javascript
+const mesh = db.room.mesh
+
+// Send to all peers across all cells
+mesh.send({ type: "broadcast", message: "Hello mesh!" })
+
+// Receive messages
+mesh.on("message", (data, fromPeerId) => {
+  console.log(`From ${fromPeerId}:`, data)
+})
+```
+
+### Mesh Events
+
+```javascript
+// Your cell status
+db.room.on("mesh:state", (state) => {
+  console.log("Cell ID:", state.cellId)
+  console.log("Is Bridge:", state.isBridge)
+  console.log("Connected Bridges:", state.bridges)
+  console.log("Cell Size:", state.cellSize)
+})
+
+// Remote peer states (for visualization)
+db.room.on("mesh:peer-state", (data) => {
+  console.log(`Peer ${data.id} in cell ${data.cell}`)
+  updateNetworkVisualization(data)
+})
+```
+
+### Scalability Comparison
+
+| Peers | Standard P2P | Cellular Mesh |
+|-------|-------------|---------------|
+| 10    | 10 connections | ~10 connections |
+| 100   | 100 connections | ~10 connections |
+| 1,000 | Impractical | ~100 connections |
+| 10,000 | Impossible | ~100 connections |
+
+<Tip>
+**When to Use Mesh**: Enable cellular mesh for applications expecting 100+ simultaneous peers:
+- Massive multiplayer games
+- Large-scale collaboration
+- Virtual events
+- Live broadcasts with audience participation
+</Tip>
+
+## Configuration
+
+### Custom Relays
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: {
+    relayUrls: [
+      "wss://relay1.example.com",
+      "wss://relay2.example.com"
+    ]
+  }
+})
+```
+
+### TURN Servers
+
+```javascript
+const db = await gdb("my-db", {
+  rtc: {
+    turnConfig: [
+      {
+        urls: ["turn:turn.example.com:3478"],
+        username: "user",
+        credential: "pass"
+      }
+    ]
+  }
+})
+```
+
+## Related Methods
+
+- [Database Initialization](/api/initialization) - Configure RTC options
+- [Security Manager](/modules/security-manager) - Secure P2P communications

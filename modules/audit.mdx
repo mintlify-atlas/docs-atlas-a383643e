@@ -1,0 +1,360 @@
+---
+title: 'Audit Module'
+description: 'Automated content policy enforcement for GenosDB'
+---
+
+## Overview
+
+The Audit module provides lightweight, automated content policy enforcement for GenosDB. It scans recently added or updated nodes and deletes any that violate your audit policy.
+
+<Note>
+The Audit module uses an external language model API for content evaluation. Configure your audit prompt to define what content should be flagged.
+</Note>
+
+## Key Features
+
+- **List-driven policy enforcement**: Uses language models to evaluate content
+- **Debounced execution**: Waits 500ms after last change to avoid excessive API calls
+- **Automatic cleanup**: Deletes violating nodes from database and oplog
+- **Customizable prompt**: Define your own audit criteria
+- **Graceful error handling**: Logs API errors without crashing
+
+## Enabling the Module
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db", {
+  rtc: true,
+  audit: {
+    prompt: "detect offensive or inappropriate language, spam [find closely spaced timestamps] or prohibited content"
+  }
+})
+```
+
+<ParamField path="audit" type="boolean | object">
+  Enable the audit module. Pass `true` for defaults or an object with configuration:
+  
+  <Expandable title="audit configuration">
+    <ParamField path="prompt" type="string" required>
+      Custom audit policy prompt that defines what content should be flagged and removed.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## How It Works
+
+1. **Monitoring**: Watches the operation log (oplog) for new/updated nodes
+2. **Debouncing**: Waits 500ms after the last change to batch evaluations
+3. **Evaluation**: Sends node content to language model with your prompt
+4. **Enforcement**: Deletes nodes that violate the policy
+5. **Cleanup**: Removes nodes from both database and oplog
+
+## Configuration Examples
+
+### Offensive Content Filter
+
+```javascript
+const db = await gdb("chat-app", {
+  rtc: true,
+  audit: {
+    prompt: "detect offensive language, hate speech, or harassment"
+  }
+})
+```
+
+### Spam Detection
+
+```javascript
+const db = await gdb("forum", {
+  rtc: true,
+  audit: {
+    prompt: "detect spam, promotional content, or duplicate messages [check timestamps]"
+  }
+})
+```
+
+### Multi-Policy Enforcement
+
+```javascript
+const db = await gdb("social-app", {
+  rtc: true,
+  audit: {
+    prompt: `detect:
+      - offensive or inappropriate language
+      - spam or promotional content
+      - personal information (emails, phone numbers, addresses)
+      - copyrighted material
+      - messages posted too frequently [check timestamps]`
+  }
+})
+```
+
+### Custom Policy
+
+```javascript
+const db = await gdb("kids-app", {
+  rtc: true,
+  audit: {
+    prompt: "detect content inappropriate for children under 13, including violence, adult themes, or contact information"
+  }
+})
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Chat Moderation" icon="comments">
+    Automatically remove offensive messages in real-time chat
+  </Card>
+  <Card title="Spam Prevention" icon="shield">
+    Detect and delete spam or promotional content
+  </Card>
+  <Card title="Content Safety" icon="child">
+    Enforce age-appropriate content policies
+  </Card>
+  <Card title="Data Privacy" icon="user-secret">
+    Remove accidental PII (emails, phone numbers)
+  </Card>
+  <Card title="Community Guidelines" icon="gavel">
+    Enforce custom community standards
+  </Card>
+  <Card title="Compliance" icon="file-contract">
+    Ensure content meets regulatory requirements
+  </Card>
+</CardGroup>
+
+## Examples
+
+### Todo List with Spam Prevention
+
+```javascript
+const db = await gdb("todos", {
+  rtc: true,
+  audit: {
+    prompt: "detect spam or inappropriate task descriptions"
+  }
+})
+
+// User adds task
+await db.put({
+  type: "Task",
+  text: "Buy milk",
+  created: Date.now()
+})
+
+// If spam is detected, it's automatically removed
+// Clean tasks remain in the database
+```
+
+### Chat Application
+
+```javascript
+const db = await gdb("chat", {
+  rtc: true,
+  audit: {
+    prompt: "detect offensive language, harassment, or spam"
+  }
+})
+
+class ChatRoom {
+  async sendMessage(userId, text) {
+    await db.put({
+      type: "Message",
+      userId,
+      text,
+      timestamp: Date.now()
+    })
+    
+    // Audit module will evaluate and potentially remove this message
+  }
+  
+  async getMessages() {
+    const { results } = await db.map({
+      query: { type: "Message" },
+      field: "timestamp",
+      order: "asc"
+    })
+    
+    return results // Only approved messages
+  }
+}
+```
+
+### Forum with Rate Limiting
+
+```javascript
+const db = await gdb("forum", {
+  rtc: true,
+  audit: {
+    prompt: "detect spam, duplicate posts, or messages from the same user posted within 10 seconds [check timestamps]"
+  }
+})
+
+class Forum {
+  async createPost(userId, title, content) {
+    const postId = await db.put({
+      type: "Post",
+      userId,
+      title,
+      content,
+      created: Date.now()
+    })
+    
+    // Audit checks:
+    // 1. Content quality
+    // 2. Posting frequency
+    // 3. Duplicate detection
+    
+    return postId
+  }
+}
+```
+
+## Debouncing Behavior
+
+```javascript
+// Multiple rapid changes trigger only one audit
+await db.put({ type: "Task", text: "Task 1" }) // t=0ms
+await db.put({ type: "Task", text: "Task 2" }) // t=10ms
+await db.put({ type: "Task", text: "Task 3" }) // t=20ms
+
+// Audit runs at t=520ms (500ms after last change)
+// Evaluates all 3 tasks in a single batch
+```
+
+This prevents API flooding and reduces costs.
+
+## Error Handling
+
+```javascript
+// If the audit API fails:
+// - Error is logged to console
+// - Application continues running
+// - Content is NOT deleted (fail-safe)
+// - Next audit attempt happens on next change
+```
+
+<Warning>
+**Fail-Safe Design**: If the audit service is unavailable, content is NOT deleted. This prevents false positives from removing legitimate content.
+</Warning>
+
+## Performance Considerations
+
+### API Costs
+
+- Debouncing reduces API calls significantly
+- Batch evaluation is more efficient than per-node
+- Only recently changed nodes are evaluated
+
+### Response Time
+
+- 500ms debounce delay
+- Plus API response time (typically 500-2000ms)
+- Total: ~1-3 seconds from content creation to removal
+
+### Optimization Tips
+
+<Tip>
+**Be Specific in Prompts**: More specific prompts lead to faster, more accurate evaluations:
+
+```javascript
+// ✅ Specific
+prompt: "detect offensive language or hate speech"
+
+// ❌ Too vague
+prompt: "detect bad content"
+```
+</Tip>
+
+<Tip>
+**Use for Moderation, Not Prevention**: Audit is best for post-creation moderation. For prevention, implement client-side validation:
+
+```javascript
+// Client-side: Prevent submission
+if (text.length < 3) {
+  alert("Message too short")
+  return
+}
+
+// Server-side: Audit for policy violations
+await db.put({ type: "Message", text })
+```
+</Tip>
+
+## Customizing Audit Logic
+
+The prompt is the primary configuration:
+
+```javascript
+// Time-based checks
+prompt: "detect messages posted within 5 seconds of previous message [check timestamps]"
+
+// Content-based checks  
+prompt: "detect promotional content or external links"
+
+// Combination
+prompt: "detect spam [rapid posting], offensive language, or promotional content"
+```
+
+## Monitoring Audit Activity
+
+```javascript
+// Watch for deletions
+const { unsubscribe } = await db.map(
+  { query: { type: "Message" } },
+  ({ id, value, action }) => {
+    if (action === "removed") {
+      console.log(`Message ${id} was removed by audit`)
+      // Log for review or analytics
+    }
+  }
+)
+```
+
+## Live Example
+
+[**Todo List with Audit**](https://estebanrfp.github.io/gdb/examples/todolist-audit.html)
+
+Interactive demo showing the audit module in action.
+
+## Best Practices
+
+<Tip>
+**Test Your Prompts**: Test audit prompts thoroughly before production:
+
+```javascript
+// Development: Lenient
+audit: {
+  prompt: "detect severe violations only"
+}
+
+// Production: Comprehensive
+audit: {
+  prompt: "detect offensive language, spam, or inappropriate content"
+}
+```
+</Tip>
+
+<Warning>
+**Privacy Considerations**: Audit sends node content to external APIs. Ensure:
+- Users are informed in your privacy policy
+- Sensitive data is not audited (use field exclusions if needed)
+- You comply with data protection regulations (GDPR, CCPA, etc.)
+</Warning>
+
+<Tip>
+**Combine with Manual Review**: For high-stakes applications, combine automated audit with manual review:
+
+```javascript
+// Flag for review instead of auto-delete
+audit: {
+  prompt: "detect potentially problematic content for human review"
+}
+```
+</Tip>
+
+## Related Modules
+
+- [Security Manager](/modules/security-manager) - User authentication and roles
+- [ACLs](/modules/acls) - Node-level permissions

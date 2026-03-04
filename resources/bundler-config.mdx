@@ -1,0 +1,140 @@
+---
+title: "Bundler Configuration"
+description: "Configure your build tool to work with GenosDB's dynamic imports"
+---
+
+GenosDB uses dynamic imports with `import.meta.url` for loading optional modules. Some bundlers may require additional configuration to handle this correctly.
+
+## Vite
+
+If using Vite, add the following to your `vite.config.js`:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  optimizeDeps: {
+    exclude: ['genosdb']
+  }
+})
+```
+
+<Info>
+This tells Vite to skip pre-bundling GenosDB, allowing the dynamic imports to resolve correctly at runtime.
+</Info>
+
+## Webpack
+
+No additional configuration is typically required for **Webpack 5+**.
+
+GenosDB's dynamic imports work out of the box with modern Webpack configurations.
+
+<Note>
+If you encounter issues with older Webpack versions (< 5), consider upgrading or using a different bundler.
+</Note>
+
+## esbuild / Bun
+
+### Bun Example
+
+When using `Bun.build`, no special configuration is needed:
+
+```javascript bundler.ts
+async function build() {
+  console.time("Build");
+  
+  const result = await Bun.build({
+    entrypoints: ['./app.js'],
+    outdir: './dist',
+    target: 'browser',
+  });
+  
+  console.timeEnd("Build");
+  
+  if (!result.success) {
+    console.error('Build failed:', result.logs);
+  }
+}
+
+await build();
+```
+
+GenosDB's dynamic imports resolve correctly with Bun's native bundler.
+
+## Rollup
+
+Rollup handles dynamic imports natively. No special configuration needed:
+
+```javascript rollup.config.js
+export default {
+  input: 'src/main.js',
+  output: {
+    file: 'dist/bundle.js',
+    format: 'esm' // Important: Use ESM format
+  }
+};
+```
+
+## Parcel
+
+Parcel 2+ supports dynamic imports out of the box. No configuration required:
+
+```bash
+parcel build index.html
+```
+
+## CDN Usage (No Bundler)
+
+When loading GenosDB directly from a CDN, no bundler configuration is needed:
+
+```html
+<script type="module">
+  import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js'
+  
+  const db = await gdb('mydb', { rtc: true });
+</script>
+```
+
+<Card title="Recommended for Quick Starts" icon="bolt">
+  Using the CDN is the fastest way to get started with GenosDB without any build setup.
+</Card>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: Cannot find module './genosrtc.min.js'">
+    **Cause**: Bundler is trying to statically resolve dynamic imports
+    
+    **Solution**: Configure bundler to exclude GenosDB from pre-bundling (see Vite example above)
+  </Accordion>
+  
+  <Accordion title="Error: import.meta is not defined">
+    **Cause**: Build target is not ESM or environment doesn't support import.meta
+    
+    **Solution**: Ensure your bundler output format is `esm` and target is modern browsers
+    
+    ```javascript
+    // Rollup example
+    output: {
+      format: 'esm' // Not 'cjs' or 'iife'
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Modules not loading at runtime">
+    **Cause**: Dynamic imports are being bundled but files aren't copied to dist
+    
+    **Solution**: Ensure GenosDB's dist files are accessible in your output directory
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+1. **Use ESM output format** for best compatibility
+2. **Exclude GenosDB from pre-bundling** if using aggressive optimization
+3. **Test in production build** to catch bundling issues early
+4. **Use CDN for prototypes** to avoid bundler complexity
+
+<Note>
+For production applications, we recommend using a bundler with proper configuration to optimize bundle size and performance.
+</Note>

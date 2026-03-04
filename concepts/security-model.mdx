@@ -1,0 +1,580 @@
+---
+title: Security Model
+description: Comprehensive guide to GenosDB's zero-trust security architecture with RBAC, WebAuthn, cryptographic signatures, and ACLs
+---
+
+## Overview
+
+GenosDB's security architecture provides robust authentication, data integrity, and access control within a distributed, peer-to-peer (P2P) environment. The **Security Manager (SM)** module transforms GenosDB into a secure, zero-trust platform by integrating cryptographic identity, role-based permissions, and end-to-end encryption directly into the data pipeline.
+
+<Info>
+The Security Manager is optional and enabled during database initialization with the `sm` configuration option.
+</Info>
+
+## Enabling the Security Manager
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('my-secure-db', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0x1234...', '0x5678...']  // Ethereum addresses
+  }
+})
+```
+
+## Core Security Components
+
+### 1. Cryptographic Identity
+
+Every user in GenosDB is identified by an **Ethereum wallet** with a cryptographic key pair:
+
+- **Public Address**: Unique user identifier visible to all peers
+- **Private Key**: Securely stored, used to sign all operations
+- **Sovereignty**: Users own their digital identity without central authority
+
+<CardGroup cols={2}>
+  <Card title="WebAuthn Protection" icon="fingerprint">
+    Private keys are encrypted using secrets derived from biometric authentication or hardware security keys (FIDO2).
+  </Card>
+  
+  <Card title="Mnemonic Recovery" icon="key">
+    BIP39 mnemonic phrases enable account creation and backup for recovery across devices.
+  </Card>
+</CardGroup>
+
+### 2. Role-Based Access Control (RBAC)
+
+RBAC defines a hierarchy of roles with specific permissions, enforced via cryptographic signatures:
+
+#### Default Role Hierarchy
+
+<Steps>
+  <Step title="guest">
+    **Permissions:** `read`, `sync`
+    
+    Basic read-only access to synchronized data.
+  </Step>
+  
+  <Step title="user">
+    **Permissions:** `write`, `link`, `sync`
+    
+    **Inherits:** `guest`
+    
+    Can create and modify their own data.
+  </Step>
+  
+  <Step title="manager">
+    **Permissions:** `publish`
+    
+    **Inherits:** `user`
+    
+    Can publish content visible to all users.
+  </Step>
+  
+  <Step title="admin">
+    **Permissions:** `delete`
+    
+    **Inherits:** `manager`
+    
+    Can delete any content.
+  </Step>
+  
+  <Step title="superadmin">
+    **Permissions:** `assignRole`, `deleteAny`
+    
+    **Inherits:** `admin`
+    
+    Can assign roles and has unrestricted access.
+  </Step>
+</Steps>
+
+#### Custom Roles
+
+You can define custom roles during initialization:
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0x1234...'],
+    customRoles: {
+      editor: {
+        can: ['write', 'publish'],
+        inherits: ['guest']
+      },
+      moderator: {
+        can: ['delete'],
+        inherits: ['user']
+      }
+    }
+  }
+})
+```
+
+### 3. In-Graph Role Storage
+
+User roles are stored as nodes within the GenosDB graph itself:
+
+- **Distributed**: Roles are synchronized across all peers via P2P
+- **Publicly Readable**: Any peer can query user roles for verification
+- **Format**: Stored in `user:[eth_address]` nodes
+
+```javascript
+// Assign a role (requires superadmin permission)
+await db.sm.assignRole('0xUserAddress...', 'admin')
+
+// Query a user's role
+const userRole = await db.sm.getUserRole('0xUserAddress...')
+console.log(userRole)  // 'admin'
+```
+
+<Warning>
+Only users with the `assignRole` permission (typically superadmins) can modify user roles.
+</Warning>
+
+### 4. Cryptographic Operation Signing
+
+Every database operation in a secure GenosDB instance is cryptographically signed:
+
+#### Outgoing Operations
+
+<Steps>
+  <Step title="User performs operation">
+    ```javascript
+    await db.put({ name: 'Alice' }, 'user1')
+    ```
+  </Step>
+  
+  <Step title="SM signs the operation">
+    The operation is signed with the user's private key before broadcast.
+  </Step>
+  
+  <Step title="Signature embedded">
+    The signature and public address are included in the P2P message.
+  </Step>
+</Steps>
+
+#### Incoming Operations
+
+The SM middleware on each peer verifies every incoming operation:
+
+<Steps>
+  <Step title="Verify Signature">
+    Confirm the cryptographic signature matches the operation content and sender's public address.
+  </Step>
+  
+  <Step title="Resolve Permissions">
+    Look up the sender's role in the local graph (`user:[eth_address]` node).
+  </Step>
+  
+  <Step title="Authorize Action">
+    Check if the resolved role has permission for the requested action.
+  </Step>
+  
+  <Step title="Apply or Reject">
+    Valid operations are applied to the graph; invalid operations are silently discarded.
+  </Step>
+</Steps>
+
+```javascript
+// Example: User with 'guest' role attempts to write
+// SM middleware will reject the operation because 'guest' lacks 'write' permission
+```
+
+<Tip>
+This creates a **zero-trust environment** where every peer independently enforces security rules.
+</Tip>
+
+## WebAuthn Authentication
+
+GenosDB supports passwordless authentication using the **WebAuthn standard**:
+
+### Registration Flow
+
+```javascript
+// 1. Start new user registration (generates mnemonic)
+const { mnemonic, address } = await db.sm.startNewUserRegistration()
+
+console.log('Save this mnemonic securely:', mnemonic)
+console.log('Your address:', address)
+
+// 2. Protect the identity with WebAuthn (biometrics/security key)
+const protected = await db.sm.protectCurrentIdentityWithWebAuthn(
+  'user@example.com'  // Username/identifier
+)
+
+if (protected.success) {
+  console.log('Identity protected with WebAuthn')
+}
+```
+
+### Login Flow
+
+```javascript
+// Login using WebAuthn (no password required)
+const result = await db.sm.loginCurrentUserWithWebAuthn()
+
+if (result.success) {
+  console.log('Logged in as:', result.address)
+} else {
+  console.error('Login failed:', result.error)
+}
+```
+
+### Mnemonic Recovery
+
+```javascript
+// Recover account on a new device
+const mnemonic = 'word1 word2 word3 ...'  // User's backup phrase
+const result = await db.sm.loginOrRecoverUserWithMnemonic(mnemonic)
+
+if (result.success) {
+  console.log('Account recovered:', result.address)
+  
+  // Re-protect with WebAuthn on the new device
+  await db.sm.protectCurrentIdentityWithWebAuthn('user@example.com')
+}
+```
+
+<Warning>
+Mnemonics provide full account access. Users must store them securely, preferably offline.
+</Warning>
+
+## Access Control Lists (ACLs)
+
+ACLs extend RBAC with **fine-grained, per-node permissions**:
+
+### Enabling ACLs
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0x1234...'],
+    acls: true  // Enable ACL module
+  }
+})
+```
+
+### Creating Nodes with ACLs
+
+```javascript
+// Create a node with initial ACL permissions
+const nodeId = await db.sm.acls.set(
+  { title: 'Private Document', content: '...' },  // Node value
+  {
+    '0xUserA...': ['read', 'write'],  // UserA can read and write
+    '0xUserB...': ['read']            // UserB can only read
+  }
+)
+```
+
+### Granting and Revoking Permissions
+
+```javascript
+// Grant write permission to a user
+await db.sm.acls.grant(
+  nodeId,           // Node ID
+  '0xUserC...',     // User address
+  ['read', 'write'] // Permissions
+)
+
+// Revoke write permission
+await db.sm.acls.revoke(
+  nodeId,
+  '0xUserC...',
+  ['write']  // Revoke only write, keep read
+)
+```
+
+### Permission Types
+
+<CardGroup cols={3}>
+  <Card title="read" icon="eye">
+    View node data
+  </Card>
+  
+  <Card title="write" icon="pencil">
+    Modify node data
+  </Card>
+  
+  <Card title="delete" icon="trash">
+    Remove the node
+  </Card>
+</CardGroup>
+
+### Ownership Model
+
+The creator of a node automatically becomes the **owner** with full permissions:
+
+```javascript
+// User creates a node - becomes owner automatically
+const nodeId = await db.put({ type: 'note', text: 'My note' })
+
+// Owner can grant permissions to others
+await db.sm.acls.grant(nodeId, '0xOtherUser...', ['read'])
+```
+
+<Info>
+ACL checks are performed **in addition to** RBAC. A user must have both the role permission and the ACL permission for an operation to succeed.
+</Info>
+
+## End-to-End Encryption
+
+The SM module provides transparent, user-controlled encryption:
+
+### Encrypted Storage
+
+```javascript
+// Store encrypted data (only current user can decrypt)
+await db.sm.put({
+  secret: 'Sensitive information',
+  apiKey: 'sk_1234...'
+})
+```
+
+### Encrypted Retrieval
+
+```javascript
+// Retrieve and automatically decrypt (if user is the owner)
+const { result } = await db.sm.get(nodeId)
+
+if (result.decrypted) {
+  console.log('Decrypted data:', result.value)
+} else {
+  console.log('Cannot decrypt (not the owner)')
+}
+```
+
+### How It Works
+
+<Steps>
+  <Step title="Encryption">
+    Data is encrypted using a key derived from the user's private key.
+  </Step>
+  
+  <Step title="Secure Payload">
+    The encrypted ciphertext is wrapped in a `_gdbSecurePayloadV1` object with metadata:
+    
+    ```javascript
+    {
+      _payload: 'encrypted_ciphertext',  // Encrypted data
+      _meta: {
+        owner: '0xUserAddress...'  // Owner's public address
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Conditional Decryption">
+    When retrieved, the SM checks if the current user's address matches the owner. If yes, it decrypts automatically.
+  </Step>
+</Steps>
+
+<Warning>
+Encrypted data is only accessible to the owner. There is no "shared encryption" - use ACLs for collaborative access to unencrypted data.
+</Warning>
+
+## Distributed Trust Model
+
+GenosDB's security model eliminates central authority through three principles:
+
+### 1. Cryptographic Identity
+
+Each user is identified by a unique cryptographic keypair, not by a username/password managed by a server.
+
+### 2. Verifiable Actions
+
+Every operation is digitally signed, ensuring:
+- **Authenticity**: Proof of who performed the action
+- **Integrity**: Proof the action wasn't tampered with
+- **Non-repudiation**: The signer cannot deny performing the action
+
+### 3. Shared Constitution
+
+Security rules (roles, permissions) are:
+- Embedded in the software itself
+- Distributed as graph data
+- Enforced locally by every peer
+- Agreed upon through eventual consistency
+
+### Solving the Bootstrap Problem
+
+How does a new user join without a central authority to verify them?
+
+<Steps>
+  <Step title="Zero-Trust Welcome Exception">
+    A new user is allowed **one** `write` operation to create their profile node.
+  </Step>
+  
+  <Step title="Default Guest Role">
+    After the initial write, the user is treated as a `guest` with limited permissions.
+  </Step>
+  
+  <Step title="Role Assignment">
+    A `superadmin` explicitly grants the user a higher role if appropriate.
+  </Step>
+</Steps>
+
+```javascript
+// New user creates their profile (allowed once)
+await db.put({ name: 'Alice', bio: 'New user' }, 'alice-profile')
+
+// Subsequent writes require proper role assignment
+// Superadmin assigns role
+await db.sm.assignRole('0xAliceAddress...', 'user')
+```
+
+<Tip>
+This prevents privilege escalation attacks while allowing legitimate new users to join.
+</Tip>
+
+## Security in Full-State Sync
+
+During full-state synchronization, additional validation occurs:
+
+- **Origin Pre-validation**: Permission checks before operations modify the sender's local database
+- **Node Verification on Sync**: Permissions of `lastModifiedBy` user are verified for nodes newer than local versions
+- **(Optional) Trust in Sync Sender**: Acceptance of full graphs can be restricted to high-trust roles (e.g., `admin`)
+
+## Session Management
+
+### Logout
+
+```javascript
+// Clear current user session
+await db.sm.clearSecurity()
+console.log('User logged out')
+```
+
+### Check Current User
+
+```javascript
+// Get current authenticated user
+const currentUser = db.sm.getCurrentUser()
+
+if (currentUser) {
+  console.log('Logged in as:', currentUser.address)
+} else {
+  console.log('No user logged in')
+}
+```
+
+### Verifier-Only Mode
+
+A GenosDB instance without an active user session can still verify operations:
+
+```javascript
+const db = await gdb('public-db', {
+  rtc: true,
+  sm: { superAdmins: ['0x1234...'] }
+})
+
+// No user logged in, but SM still enforces security rules
+// Incoming operations are verified and applied based on sender's role
+```
+
+## Complete Security Example
+
+```javascript
+import { gdb } from 'genosdb'
+
+// Initialize secure database
+const db = await gdb('secure-app', {
+  rtc: true,
+  sm: {
+    superAdmins: ['0xSuperAdmin...'],
+    customRoles: {
+      editor: { can: ['write', 'publish'], inherits: ['guest'] }
+    },
+    acls: true
+  }
+})
+
+// === Registration ===
+const { mnemonic, address } = await db.sm.startNewUserRegistration()
+console.log('Backup this mnemonic:', mnemonic)
+
+// Protect with WebAuthn
+await db.sm.protectCurrentIdentityWithWebAuthn('alice@example.com')
+
+// === Superadmin assigns role ===
+await db.sm.assignRole(address, 'editor')
+
+// === Create encrypted personal data ===
+await db.sm.put({ secret: 'My API key' })
+
+// === Create shared data with ACLs ===
+const docId = await db.sm.acls.set(
+  { title: 'Team Document', content: '...' },
+  {
+    '0xTeamMember1...': ['read', 'write'],
+    '0xTeamMember2...': ['read']
+  }
+)
+
+// === Later: Login with WebAuthn ===
+const loginResult = await db.sm.loginCurrentUserWithWebAuthn()
+if (loginResult.success) {
+  console.log('Logged in successfully')
+}
+
+// === Logout ===
+await db.sm.clearSecurity()
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure Mnemonic Storage" icon="vault">
+    Never store mnemonics in code or version control. Use secure, offline storage.
+  </Card>
+  
+  <Card title="Minimal Superadmins" icon="users">
+    Limit the number of superadmin addresses to reduce attack surface.
+  </Card>
+  
+  <Card title="Principle of Least Privilege" icon="shield-halved">
+    Assign users the minimum role necessary for their tasks.
+  </Card>
+  
+  <Card title="Use ACLs for Sensitive Data" icon="lock">
+    Combine RBAC with ACLs for fine-grained control over sensitive nodes.
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Warning>
+**Client-Side Security**: GenosDB's security runs in the browser. While cryptographic operations are robust, users with modified/malicious clients can bypass local checks. The P2P verification layer ensures network integrity, but cannot prevent a malicious user from corrupting their own local state.
+</Warning>
+
+<Warning>
+**Mnemonic Compromise**: If a user's mnemonic phrase is compromised, an attacker gains full access to that identity. There is no "password reset" - the user must create a new identity and have a superadmin assign roles.
+</Warning>
+
+<Info>
+WebAuthn provides strong protection against phishing and credential stuffing attacks, making it the recommended authentication method for production applications.
+</Info>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="CRUD Operations" icon="database" href="/guides/crud-operations">
+    Learn how put, get, and remove work with security
+  </Card>
+  
+  <Card title="P2P Sync" icon="network-wired" href="/concepts/p2p-sync">
+    Understand how signed operations are synchronized
+  </Card>
+  
+  <Card title="Chat Example" icon="comments" href="/examples/chat-app">
+    See RBAC in action in a real-time chat application
+  </Card>
+  
+  <Card title="SM API Reference" icon="book" href="/modules/security-manager">
+    Complete SM API documentation
+  </Card>
+</CardGroup>

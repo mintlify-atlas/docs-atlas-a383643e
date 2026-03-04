@@ -1,0 +1,552 @@
+---
+title: CRUD Operations
+description: Complete guide to creating, reading, updating, and deleting data in GenosDB with put, get, link, and remove operations
+---
+
+## Overview
+
+GenosDB provides a simple yet powerful API for managing graph data. The core CRUD operations are:
+
+- **`put(value, id?)`** - Create or update nodes
+- **`get(id, callback?)`** - Read node data
+- **`link(sourceId, targetId)`** - Create relationships
+- **`remove(id)`** - Delete nodes
+- **`clear()`** - Remove all data
+
+<Info>
+All CRUD operations are asynchronous and return Promises. Use `await` or `.then()` to handle results.
+</Info>
+
+## Creating and Updating Data: `put`
+
+The `put` method inserts new nodes or updates existing ones.
+
+### Basic Usage
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('my-app')
+
+// Create a new node (auto-generated ID)
+const userId = await db.put({
+  type: 'user',
+  name: 'Alice',
+  email: 'alice@example.com'
+})
+
+console.log('Created user:', userId)
+// Output: Created user: a3f9k2...
+```
+
+### Custom IDs
+
+You can specify your own node IDs for easier reference:
+
+```javascript
+// Create with custom ID
+await db.put(
+  { type: 'user', name: 'Bob' },
+  'user:bob'  // Custom ID
+)
+
+// Later, reference by ID
+const { result } = await db.get('user:bob')
+console.log(result.value.name)  // 'Bob'
+```
+
+<Tip>
+Use meaningful IDs (e.g., `user:alice`, `post:123`) instead of auto-generated hashes when you need to reference nodes directly.
+</Tip>
+
+### Updating Nodes
+
+```javascript
+// Initial creation
+const id = await db.put({ count: 0 }, 'counter')
+
+// Update the same node
+await db.put({ count: 1 }, 'counter')
+await db.put({ count: 2 }, 'counter')
+
+// Final value
+const { result } = await db.get('counter')
+console.log(result.value.count)  // 2
+```
+
+<Warning>
+When you `put` with an existing ID, the **entire value is replaced**, not merged. To update specific fields, read the current value first.
+</Warning>
+
+### Partial Updates
+
+```javascript
+// Read current value
+const { result: current } = await db.get('user1')
+
+// Merge with new data
+await db.put(
+  { ...current.value, age: 31 },  // Keep existing fields, update age
+  'user1'
+)
+```
+
+### Real-Time Sync
+
+With P2P enabled, `put` operations sync automatically:
+
+```javascript
+const db = await gdb('shared-app', { rtc: true })
+
+// Changes sync to all connected peers instantly
+await db.put({ status: 'online' }, 'user:alice')
+```
+
+## Reading Data: `get`
+
+The `get` method retrieves node data by ID.
+
+### Static Read
+
+```javascript
+// Get a node by ID
+const { result } = await db.get('user:alice')
+
+if (result) {
+  console.log('User:', result.value)
+  console.log('ID:', result.id)
+  console.log('Edges:', result.edges)
+  console.log('Timestamp:', result.timestamp)
+} else {
+  console.log('Node not found')
+}
+```
+
+### Reactive Read
+
+Subscribe to live updates for a specific node:
+
+```javascript
+const { result, unsubscribe } = await db.get(
+  'user:alice',
+  (node) => {
+    if (node) {
+      console.log('User updated:', node.value)
+    } else {
+      console.log('User deleted')
+    }
+  }
+)
+
+// Initial value is also available
+console.log('Initial:', result)
+
+// Later: stop listening
+unsubscribe()
+```
+
+<Info>
+Reactive `get` is perfect for UI components that need to stay synchronized with a single node.
+</Info>
+
+### Node Structure
+
+Every node has the following structure:
+
+```javascript
+{
+  id: 'user:alice',           // Node identifier
+  value: {                     // Your data
+    type: 'user',
+    name: 'Alice',
+    email: 'alice@example.com'
+  },
+  edges: ['group:1', 'post:5'], // Outgoing links
+  timestamp: {                  // Hybrid Logical Clock
+    physical: 1709587200000,
+    logical: 3
+  }
+}
+```
+
+## Creating Relationships: `link`
+
+The `link` method creates directed edges between nodes.
+
+### Basic Linking
+
+```javascript
+// Create nodes
+const userId = await db.put({ name: 'Alice' }, 'user:alice')
+const groupId = await db.put({ name: 'Developers' }, 'group:devs')
+
+// Create a link: user -> group
+await db.link('user:alice', 'group:devs')
+
+// Verify the link
+const { result: user } = await db.get('user:alice')
+console.log(user.edges)  // ['group:devs']
+```
+
+### Multiple Links
+
+```javascript
+// A user can link to multiple groups
+await db.link('user:alice', 'group:devs')
+await db.link('user:alice', 'group:admins')
+await db.link('user:alice', 'group:moderators')
+
+const { result: user } = await db.get('user:alice')
+console.log(user.edges)  // ['group:devs', 'group:admins', 'group:moderators']
+```
+
+### Building Graph Structures
+
+```javascript
+// Create a file/folder hierarchy
+await db.put({ type: 'folder', name: 'Documents' }, 'folder:docs')
+await db.put({ type: 'folder', name: 'Work' }, 'folder:work')
+await db.put({ type: 'file', name: 'report.pdf' }, 'file:report')
+
+// Link folders and files
+await db.link('folder:docs', 'folder:work')    // docs -> work
+await db.link('folder:work', 'file:report')    // work -> report
+
+// Query the graph (see graph traversal guide)
+const { results } = await db.map({
+  query: {
+    type: 'folder',
+    name: 'Documents',
+    $edge: { type: 'file' }  // Find all files under Documents
+  }
+})
+
+console.log(results)  // [{ id: 'file:report', value: { ... } }]
+```
+
+<Tip>
+Use `link` to model relationships like:
+- User memberships (user → group)
+- Document hierarchies (folder → file)
+- Social connections (user → friend)
+- Content categorization (post → tag)
+</Tip>
+
+## Deleting Data: `remove`
+
+The `remove` method deletes a node and all references to it.
+
+### Basic Deletion
+
+```javascript
+// Create a node
+const id = await db.put({ temp: true }, 'temp:data')
+
+// Delete it
+await db.remove('temp:data')
+
+// Verify deletion
+const { result } = await db.get('temp:data')
+console.log(result)  // null
+```
+
+### Cascade Behavior
+
+When you remove a node:
+
+1. The node itself is deleted
+2. All **incoming links** (edges from other nodes to this node) are removed
+3. The node's **outgoing links** (in its `edges` array) are cleared
+
+```javascript
+// Create nodes and links
+await db.put({ name: 'Alice' }, 'user:alice')
+await db.put({ name: 'Developers' }, 'group:devs')
+await db.link('user:alice', 'group:devs')
+
+// Delete the group
+await db.remove('group:devs')
+
+// The link is automatically removed from Alice
+const { result: user } = await db.get('user:alice')
+console.log(user.edges)  // [] (empty)
+```
+
+<Warning>
+`remove` does **not** delete nodes that the target node links to. It only removes the edges.
+</Warning>
+
+### Real-Time Deletion
+
+Deletions sync across peers and trigger reactive callbacks:
+
+```javascript
+const db = await gdb('shared-app', { rtc: true })
+
+// Subscribe to a node
+await db.get('user:alice', (node) => {
+  if (node === null) {
+    console.log('User was deleted!')
+  }
+})
+
+// On another peer: delete the node
+await db.remove('user:alice')
+// Callback fires with null on all subscribed peers
+```
+
+## Clearing All Data: `clear`
+
+The `clear` method removes **all nodes, edges, and indexes** from the database.
+
+```javascript
+// Nuclear option: delete everything
+await db.clear()
+
+console.log('Database cleared')
+```
+
+<Warning>
+`clear()` is irreversible and deletes all local data. Use with caution, especially in production.
+</Warning>
+
+<Info>
+In P2P mode, `clear()` only affects the local peer. Other peers retain their data and will re-sync when reconnected.
+</Info>
+
+## Complete CRUD Example
+
+Here's a complete example building a simple blog:
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('blog-app', { rtc: true })
+
+// === CREATE ===
+
+// Create an author
+const authorId = await db.put(
+  { type: 'author', name: 'Alice', bio: 'Tech writer' },
+  'author:alice'
+)
+
+// Create a post
+const postId = await db.put(
+  {
+    type: 'post',
+    title: 'Getting Started with GenosDB',
+    content: 'GenosDB is a P2P graph database...',
+    publishedAt: new Date().toISOString()
+  },
+  'post:001'
+)
+
+// Create tags
+await db.put({ type: 'tag', name: 'tutorial' }, 'tag:tutorial')
+await db.put({ type: 'tag', name: 'database' }, 'tag:database')
+
+// === LINK ===
+
+// Link post to author
+await db.link('post:001', 'author:alice')
+
+// Link post to tags
+await db.link('post:001', 'tag:tutorial')
+await db.link('post:001', 'tag:database')
+
+// === READ ===
+
+// Get the post with reactive updates
+const { result: post, unsubscribe: unsub1 } = await db.get(
+  'post:001',
+  (updatedPost) => {
+    console.log('Post updated:', updatedPost.value.title)
+  }
+)
+
+console.log('Post:', post.value)
+console.log('Links:', post.edges)  // ['author:alice', 'tag:tutorial', 'tag:database']
+
+// Query all posts by this author (using graph traversal)
+const { results: authorPosts } = await db.map({
+  query: {
+    type: 'author',
+    name: 'Alice',
+    $edge: { type: 'post' }  // Traverse to linked posts
+  }
+})
+
+console.log('Alice\'s posts:', authorPosts)
+
+// === UPDATE ===
+
+// Update the post (partial update)
+const { result: currentPost } = await db.get('post:001')
+await db.put(
+  {
+    ...currentPost.value,
+    title: 'Getting Started with GenosDB (Updated)',
+    updatedAt: new Date().toISOString()
+  },
+  'post:001'
+)
+
+// === DELETE ===
+
+// Remove a tag
+await db.remove('tag:database')
+
+// The link is automatically removed from the post
+const { result: updatedPost } = await db.get('post:001')
+console.log(updatedPost.edges)  // ['author:alice', 'tag:tutorial']
+
+// Clean up subscriptions
+unsub1()
+```
+
+## CRUD with Security Manager
+
+When using the Security Manager, CRUD operations are automatically signed and verified:
+
+```javascript
+const db = await gdb('secure-app', {
+  rtc: true,
+  sm: { superAdmins: ['0x1234...'] }
+})
+
+// Login
+await db.sm.loginCurrentUserWithWebAuthn()
+
+// Operations are now signed with user's private key
+await db.put({ secret: 'data' }, 'node1')  // Signed automatically
+
+// On remote peers, the signature is verified
+// Invalid or unauthorized operations are rejected
+```
+
+<Info>
+See the [Security Model](/concepts/security-model) guide for details on RBAC and permissions.
+</Info>
+
+## Performance Considerations
+
+### Batching Operations
+
+For bulk inserts, batch operations to reduce sync overhead:
+
+```javascript
+// ❌ Inefficient: Sync after each put
+for (let i = 0; i < 1000; i++) {
+  await db.put({ value: i }, `node:${i}`)
+}
+
+// ✅ Better: Batch without awaiting
+const promises = []
+for (let i = 0; i < 1000; i++) {
+  promises.push(db.put({ value: i }, `node:${i}`))
+}
+await Promise.all(promises)
+```
+
+### Save Delay Configuration
+
+Adjust the debounce delay for persistence:
+
+```javascript
+const db = await gdb('my-app', {
+  saveDelay: 1000  // Wait 1 second before persisting (default: 200ms)
+})
+
+// Reduces disk I/O under heavy write loads
+// Trade-off: Higher risk of data loss if browser crashes
+```
+
+<Warning>
+Higher `saveDelay` values improve write performance but increase the window for potential data loss.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Meaningful IDs" icon="tag">
+    Custom IDs (`user:alice`) are easier to work with than auto-generated hashes.
+  </Card>
+  
+  <Card title="Design for Granularity" icon="puzzle-piece">
+    Split large objects into smaller nodes to reduce conflict resolution issues.
+  </Card>
+  
+  <Card title="Clean Up Subscriptions" icon="broom">
+    Always call `unsubscribe()` when done with reactive queries to prevent memory leaks.
+  </Card>
+  
+  <Card title="Handle Null Results" icon="circle-question">
+    Check if `result` is null before accessing properties — nodes may not exist or may be deleted.
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Soft Delete
+
+```javascript
+// Instead of remove, mark as deleted
+await db.put({ ...node, deleted: true }, nodeId)
+
+// Filter out deleted nodes in queries
+const { results } = await db.map({
+  query: { type: 'post', deleted: { $ne: true } }
+})
+```
+
+### Timestamps
+
+```javascript
+// Add created/updated timestamps
+const now = new Date().toISOString()
+
+const id = await db.put({
+  type: 'post',
+  title: 'My Post',
+  createdAt: now,
+  updatedAt: now
+}, 'post:1')
+
+// On update
+const { result } = await db.get('post:1')
+await db.put(
+  { ...result.value, updatedAt: new Date().toISOString() },
+  'post:1'
+)
+```
+
+### Inverse Links (Bidirectional)
+
+```javascript
+// Create bidirectional relationship
+await db.link('user:alice', 'user:bob')  // Alice -> Bob
+await db.link('user:bob', 'user:alice')  // Bob -> Alice
+
+// Now both can traverse to each other
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Queries" icon="magnifying-glass" href="/guides/queries">
+    Learn how to query nodes with advanced filters
+  </Card>
+  
+  <Card title="Graph Traversal" icon="diagram-project" href="/guides/graph-traversal">
+    Master the $edge operator for recursive queries
+  </Card>
+  
+  <Card title="Real-Time Subscriptions" icon="bell" href="/guides/real-time-subscriptions">
+    Set up reactive queries with live updates
+  </Card>
+  
+  <Card title="Todo App Example" icon="list-check" href="/examples/todo-app">
+    See CRUD operations in a complete application
+  </Card>
+</CardGroup>

@@ -1,0 +1,245 @@
+---
+title: "Contributing to GenosDB"
+description: "How to contribute examples, documentation, and feedback"
+---
+
+We are thrilled that you're interested in contributing to GenosDB! Your help is invaluable in making the project better for everyone.
+
+<Info>
+The core source code of GenosDB is proprietary, and we do not accept pull requests for it. However, there are many impactful ways you can contribute.
+</Info>
+
+## How You Can Contribute
+
+<CardGroup cols={3}>
+  <Card title="Submit Examples" icon="code">
+    Create practical examples showcasing GenosDB features
+  </Card>
+  <Card title="Improve Documentation" icon="file-lines">
+    Fix typos, clarify explanations, add new sections
+  </Card>
+  <Card title="Report Bugs & Features" icon="bug">
+    Submit detailed bug reports or feature requests
+  </Card>
+</CardGroup>
+
+## Submitting an Example (via Pull Request)
+
+This is the primary way to add code to the project. We **only accept Pull Requests** for the `examples/` and `docs/` directories.
+
+<Steps>
+  <Step title="Explore the Library">
+    Familiarize yourself with GenosDB by reviewing the [documentation](https://github.com/estebanrfp/gdb/blob/main/docs/index.md)
+  </Step>
+  
+  <Step title="Identify a Use Case">
+    Think of a practical scenario not covered in the [examples folder](https://github.com/estebanrfp/gdb/tree/main/examples)
+    
+    **Good example ideas:**
+    - Real-time collaborative whiteboard
+    - P2P file sharing app
+    - Decentralized chat with voice
+    - Multiplayer game state sync
+    - CRDT-based document editor
+  </Step>
+  
+  <Step title="Create the Example">
+    Write clean, well-documented code that's easy to understand
+    
+    **Example structure:**
+    ```
+    examples/
+      my-example/
+        index.html
+        app.js
+        styles.css
+        README.md  (optional but recommended)
+    ```
+  </Step>
+  
+  <Step title="Submit a Pull Request">
+    1. Fork the repository
+    2. Add your example to `examples/` folder
+    3. Submit a PR explaining the purpose and features
+    4. Wait for maintainer review
+    
+    <Note>
+      We only merge PRs that modify content within `examples/` or `docs/` folders.
+    </Note>
+  </Step>
+</Steps>
+
+## Example Template
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My GenosDB Example</title>
+  <meta charset="UTF-8">
+</head>
+<body>
+  <h1>My Collaborative App</h1>
+  
+  <!-- Your UI here -->
+  
+  <script type="module">
+    import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
+    
+    async function init() {
+      const db = await gdb('my-example', { rtc: true });
+      
+      // Your application logic here
+      
+      // Example: Real-time todo list
+      await db.map(({ id, value, action }) => {
+        console.log('Update:', id, value, action);
+      });
+    }
+    
+    init();
+  </script>
+</body>
+</html>
+```
+
+## Contribution Guidelines
+
+<AccordionGroup>
+  <Accordion title="Testing">
+    - Ensure your example code runs correctly
+    - Test in multiple browsers (Chrome, Firefox, Safari)
+    - Verify P2P sync works with multiple tabs
+  </Accordion>
+  
+  <Accordion title="Documentation">
+    - Comment your code clearly
+    - If complex, add a `README.md` explaining:
+      - What the example demonstrates
+      - Key GenosDB features used
+      - How to run it
+  </Accordion>
+  
+  <Accordion title="Code Quality">
+    - Use modern JavaScript (ES6+)
+    - Avoid unnecessary dependencies
+    - Follow existing code style in the repository
+    - Keep examples focused and concise
+  </Accordion>
+  
+  <Accordion title="Issues">
+    Before starting a large example, consider opening an issue to discuss your idea first
+  </Accordion>
+</AccordionGroup>
+
+## Reporting Bugs
+
+When reporting bugs, please include:
+
+<Steps>
+  <Step title="Clear Description">
+    Describe what you expected vs. what actually happened
+  </Step>
+  <Step title="Reproduction Steps">
+    Provide step-by-step instructions to reproduce the bug
+  </Step>
+  <Step title="Code Example">
+    Include a minimal code example demonstrating the issue
+  </Step>
+  <Step title="Environment Details">
+    - GenosDB version
+    - Browser and version
+    - Operating system
+    - Relevant console errors
+  </Step>
+</Steps>
+
+**Example bug report:**
+
+```markdown
+**Bug**: db.map() doesn't emit updates for nodes created before subscription
+
+**Expected**: db.map() should emit initial nodes and future updates
+**Actual**: Only future updates are emitted, initial nodes are missing
+
+**Reproduction:**
+1. Initialize db with `await gdb('test', { rtc: true })`
+2. Create 10 nodes with `await db.put({ text: 'test' })`
+3. Subscribe with `await db.map((update) => console.log(update))`
+4. Observe: No initial nodes emitted
+
+**Environment:**
+- GenosDB v0.12.7
+- Chrome 120 on macOS 14.2
+- Error in console: (none)
+
+**Code:**
+[Include minimal reproduction code]
+```
+
+## Feature Requests
+
+When suggesting features:
+
+1. **Check existing issues** to avoid duplicates
+2. **Explain the use case** - why is this feature valuable?
+3. **Describe the API** - how would it look from a developer's perspective?
+4. **Consider alternatives** - are there workarounds with current API?
+
+## Documentation Contributions
+
+You can help improve the docs by:
+
+- **Fixing typos or broken links**
+- **Clarifying confusing explanations**
+- **Adding missing examples to existing pages**
+- **Translating documentation** (contact us first)
+
+Submit doc improvements via Pull Request to the `docs/` folder.
+
+## Community Support
+
+Help other users by:
+
+- Answering questions in [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions)
+- Sharing your experiences and tips
+- Creating tutorials or blog posts about GenosDB
+
+## Recognition
+
+Contributors who submit quality examples or significant documentation improvements will be:
+
+- Credited in the repository's contributors list
+- Mentioned in release notes (if applicable)
+- Featured on GenosDB social media
+
+## Code of Conduct
+
+We expect all contributors to:
+
+- Be respectful and inclusive
+- Provide constructive feedback
+- Focus on what's best for the community
+- Be open to different perspectives
+
+## Questions?
+
+If you're unsure about anything:
+
+- Ask in [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions)
+- Email: [estebanrfp@gmail.com](mailto:estebanrfp@gmail.com)
+
+<Card title="Thank You!" icon="heart">
+  Your contributions help GenosDB grow and serve developers worldwide. We appreciate your support! 🚀
+</Card>
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Roadmap" icon="map" href="/resources/roadmap">
+    See what we're building next
+  </Card>
+  <Card title="Changelog" icon="list-check" href="/resources/changelog">
+    View past releases and changes
+  </Card>
+</CardGroup>

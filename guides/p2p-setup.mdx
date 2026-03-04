@@ -1,0 +1,572 @@
+---
+title: P2P Network Setup
+description: Configure GenosDB's peer-to-peer networking with custom Nostr relays, TURN servers, and cellular mesh topology
+---
+
+## Overview
+
+GenosDB's P2P networking is powered by **GenosRTC**, which uses **WebRTC** for direct peer connections and **Nostr** for peer discovery and signaling. This guide covers configuring relays, TURN servers, and the cellular mesh topology for large-scale applications.
+
+## Enable P2P Networking
+
+The simplest way to enable P2P is with default settings:
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('my-app', {
+  rtc: true  // Enable P2P with default Nostr relays
+})
+```
+
+<Info>
+The database name (`'my-app'`) serves as the room ID. All peers connecting to the same room name will discover each other.
+</Info>
+
+## Custom Nostr Relays
+
+Nostr relays facilitate peer discovery and WebRTC signaling. You can specify custom relays:
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    relayUrls: [
+      'wss://relay.damus.io',
+      'wss://relay.nostr.info',
+      'wss://nostr-pub.wellorder.net'
+    ]
+  }
+})
+```
+
+### Finding Nostr Relays
+
+Use [nostr.watch/relays/find](https://legacy.nostr.watch/relays/find) to discover:
+- Public free relays
+- Paid premium relays
+- Private relays
+- Geographic-specific relays
+
+<Tip>
+Use multiple relays for redundancy. If one relay is down, peers can still connect via others.
+</Tip>
+
+### Relay Selection Criteria
+
+<CardGroup cols={2}>
+  <Card title="Latency" icon="gauge-high">
+    Choose relays geographically close to your users for faster peer discovery.
+  </Card>
+  
+  <Card title="Uptime" icon="clock">
+    Select relays with high availability (>99% uptime).
+  </Card>
+  
+  <Card title="Capacity" icon="server">
+    Ensure relays can handle your expected peer count.
+  </Card>
+  
+  <Card title="Privacy" icon="shield">
+    Consider private relays for sensitive applications.
+  </Card>
+</CardGroup>
+
+## TURN Server Configuration
+
+**TURN servers** help peers connect when they're behind restrictive firewalls or NAT (Network Address Translation). They relay traffic when direct P2P connections fail.
+
+### When You Need TURN
+
+TURN is required when:
+- Peers are behind **symmetric NAT**
+- Corporate firewalls block WebRTC
+- Mobile networks use **carrier-grade NAT**
+
+<Warning>
+Without TURN, approximately 8-15% of users may fail to connect in real-world scenarios.
+</Warning>
+
+### Setting Up TURN
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    turnConfig: [
+      {
+        urls: ['turn:turn.example.com:3478'],
+        username: 'your-username',
+        credential: 'your-password'
+      },
+      {
+        urls: ['turns:turn.example.com:5349'],  // TLS-encrypted TURN
+        username: 'your-username',
+        credential: 'your-password'
+      }
+    ]
+  }
+})
+```
+
+### Free TURN Providers
+
+For testing and small projects:
+
+- **Twilio** (free tier with signup)
+- **Metered.ca** (limited free tier)
+- **Open Relay Project** (community-run)
+
+### Self-Hosted TURN
+
+For production, consider hosting your own TURN server using **coturn**:
+
+```bash
+# Install coturn (Ubuntu/Debian)
+sudo apt-get install coturn
+
+# Basic configuration (/etc/turnserver.conf)
+listening-port=3478
+min-port=49152
+max-port=65535
+realm=your-domain.com
+server-name=turn.your-domain.com
+lt-cred-mech
+user=username:password
+```
+
+<Tip>
+Place TURN servers geographically close to your users to minimize latency.
+</Tip>
+
+## Combining Relays and TURN
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    // Custom Nostr relays for signaling
+    relayUrls: [
+      'wss://relay1.example.com',
+      'wss://relay2.example.com'
+    ],
+    
+    // TURN servers for NAT traversal
+    turnConfig: [
+      {
+        urls: ['turn:turn-us.example.com:3478'],
+        username: 'user',
+        credential: 'pass'
+      },
+      {
+        urls: ['turn:turn-eu.example.com:3478'],
+        username: 'user',
+        credential: 'pass'
+      }
+    ]
+  }
+})
+```
+
+## Cellular Mesh Configuration
+
+For applications with **100+ concurrent peers**, the cellular mesh topology reduces connection overhead from O(N²) to O(N).
+
+### Standard Mesh vs. Cellular Mesh
+
+<CardGroup cols={2}>
+  <Card title="Standard Full Mesh" icon="network-wired">
+    **Best for:** < 50 peers
+    
+    **Connections per peer:** N-1 (everyone connects to everyone)
+    
+    **Latency:** Single hop (lowest)
+    
+    **Complexity:** O(N²) total connections
+  </Card>
+  
+  <Card title="Cellular Mesh" icon="grid">
+    **Best for:** 100+ peers
+    
+    **Connections per peer:** ~cellSize + bridges
+    
+    **Latency:** Multi-hop (slightly higher)
+    
+    **Complexity:** O(N) total connections
+  </Card>
+</CardGroup>
+
+### Enabling Cellular Mesh
+
+```javascript
+// Default cellular mesh
+const db = await gdb('large-event', {
+  rtc: {
+    cells: true  // Enable with auto-calculated settings
+  }
+})
+```
+
+### Custom Cell Configuration
+
+```javascript
+const db = await gdb('massive-app', {
+  rtc: {
+    cells: {
+      cellSize: 'auto',       // Auto-calculate or set fixed number
+      bridgesPerEdge: 2,      // Redundant bridges between cells
+      maxCellSize: 50,        // Maximum peers per cell
+      targetCells: 100,       // Target number of cells
+      debug: false            // Enable debug logging
+    }
+  }
+})
+```
+
+### Cell Configuration Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `cellSize` | `'auto'` \| `number` | `'auto'` | Number of peers per cell. `'auto'` calculates based on network size |
+| `bridgesPerEdge` | `number` | `2` | Redundant connections between adjacent cells |
+| `maxCellSize` | `number` | `50` | Upper limit for cell size |
+| `targetCells` | `number` | `100` | Desired number of cells in large networks |
+| `debug` | `boolean` | `false` | Log mesh topology and routing |
+
+### How Cellular Mesh Works
+
+<Steps>
+  <Step title="Peer Organization">
+    Peers are grouped into logical cells based on consistent hashing.
+  </Step>
+  
+  <Step title="Intra-Cell Mesh">
+    Within each cell, peers maintain a full mesh (everyone connected to everyone).
+  </Step>
+  
+  <Step title="Inter-Cell Bridges">
+    Designated "bridge" peers connect adjacent cells, enabling cross-cell communication.
+  </Step>
+  
+  <Step title="Message Routing">
+    Messages route through bridges to reach peers in other cells (multi-hop).
+  </Step>
+</Steps>
+
+```
+Cell 0          Cell 1          Cell 2
+┌───────────────────────────────────────┐
+│  A    B    C   │  D    E    F   │  G    H    I   │
+│   \  /  \  /    │   \  /  \  /    │   \  /  \  /    │
+│    \/    \/     │    \/    \/     │    \/    \/     │
+│    /\    /\     │    /\    /\     │    /\    /\     │
+│   /  \  /  \    │   /  \  /  \    │   /  \  /  \    │
+│  Full Mesh      │  Full Mesh      │  Full Mesh      │
+└───────────────────────────────────────┘
+        │                      │                      │
+        └───── Bridge ─────┤───── Bridge ─────┘
+             (C ←→ D)            (F ←→ G)
+```
+
+### When to Use Cellular Mesh
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Small team (< 50 peers) | Standard mesh (`rtc: true`) |
+| Medium rooms (50-100) | Either works |
+| Large events (100-500) | Cellular mesh (`cells: true`) |
+| Massive scale (1000+) | Cellular mesh with custom config |
+
+## Connection Lifecycle
+
+### Peer Events
+
+Listen for peer connections and disconnections:
+
+```javascript
+const db = await gdb('my-app', { rtc: true })
+
+db.room.on('peer:join', (peerId) => {
+  console.log(`Peer ${peerId} joined`)
+  updatePeerCount()
+})
+
+db.room.on('peer:leave', (peerId) => {
+  console.log(`Peer ${peerId} left`)
+  updatePeerCount()
+})
+```
+
+### Monitoring Connection Status
+
+```javascript
+let connectedPeers = 0
+
+db.room.on('peer:join', (peerId) => {
+  connectedPeers++
+  document.getElementById('peer-count').textContent = connectedPeers
+})
+
+db.room.on('peer:leave', (peerId) => {
+  connectedPeers--
+  document.getElementById('peer-count').textContent = connectedPeers
+})
+```
+
+## Data Channels
+
+In addition to database sync, you can create custom data channels for ephemeral messaging:
+
+### Creating Channels
+
+```javascript
+const db = await gdb('my-app', { rtc: true })
+
+// Create a channel for cursor positions
+const cursorChannel = db.room.channel('cursors')
+
+// Send cursor position
+window.addEventListener('mousemove', (e) => {
+  cursorChannel.send({ x: e.clientX, y: e.clientY })
+})
+
+// Receive cursor positions from other peers
+cursorChannel.on('message', (position, peerId) => {
+  updateCursor(peerId, position.x, position.y)
+})
+```
+
+### Use Cases for Data Channels
+
+<CardGroup cols={2}>
+  <Card title="Cursor Positions" icon="arrow-pointer">
+    Live cursor tracking in collaborative tools
+  </Card>
+  
+  <Card title="Typing Indicators" icon="keyboard">
+    "User is typing..." notifications in chat apps
+  </Card>
+  
+  <Card title="Game State" icon="gamepad">
+    Real-time player positions and actions
+  </Card>
+  
+  <Card title="Presence" icon="circle">
+    Online/offline/away status updates
+  </Card>
+</CardGroup>
+
+<Warning>
+Data sent via channels is **not persisted** in the database. Use `db.put()` for data that must survive page refreshes.
+</Warning>
+
+## Media Streaming
+
+### Audio Streaming
+
+```javascript
+const db = await gdb('voice-chat', { rtc: true })
+
+// Get user's microphone
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+// Broadcast to all peers
+db.room.addStream(stream)
+
+// Receive audio from peers
+db.room.on('stream:add', (stream, peerId) => {
+  const audio = new Audio()
+  audio.srcObject = stream
+  audio.autoplay = true
+})
+```
+
+### Video Streaming
+
+```javascript
+const db = await gdb('video-conf', { rtc: true })
+
+// Get user's camera
+const stream = await navigator.mediaDevices.getUserMedia({ 
+  video: true, 
+  audio: true 
+})
+
+// Broadcast to all peers
+db.room.addStream(stream)
+
+// Receive video from peers
+const videoContainer = document.getElementById('videos')
+
+db.room.on('stream:add', (stream, peerId) => {
+  const video = document.createElement('video')
+  video.srcObject = stream
+  video.autoplay = true
+  video.playsInline = true
+  videoContainer.appendChild(video)
+})
+
+db.room.on('peer:leave', (peerId) => {
+  // Remove video element when peer leaves
+  const video = videoContainer.querySelector(`[data-peer="${peerId}"]`)
+  video?.remove()
+})
+```
+
+## Production Best Practices
+
+### 1. Use Multiple Relays
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    relayUrls: [
+      'wss://relay-primary.example.com',
+      'wss://relay-backup1.example.com',
+      'wss://relay-backup2.example.com'
+    ]
+  }
+})
+```
+
+### 2. Deploy TURN Servers Regionally
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    turnConfig: [
+      {
+        urls: ['turn:turn-us-east.example.com:3478'],
+        username: 'user',
+        credential: 'pass'
+      },
+      {
+        urls: ['turn:turn-eu-west.example.com:3478'],
+        username: 'user',
+        credential: 'pass'
+      },
+      {
+        urls: ['turn:turn-asia.example.com:3478'],
+        username: 'user',
+        credential: 'pass'
+      }
+    ]
+  }
+})
+```
+
+### 3. Monitor Connection Quality
+
+```javascript
+let connectionAttempts = 0
+let successfulConnections = 0
+
+db.room.on('peer:join', () => {
+  connectionAttempts++
+  successfulConnections++
+  
+  const successRate = (successfulConnections / connectionAttempts) * 100
+  console.log(`Connection success rate: ${successRate.toFixed(1)}%`)
+})
+```
+
+### 4. Handle Reconnections
+
+```javascript
+window.addEventListener('online', () => {
+  console.log('Network restored, peers will reconnect automatically')
+})
+
+window.addEventListener('offline', () => {
+  console.log('Network lost, app continues working locally')
+})
+```
+
+### 5. Test with WebRTC Checker
+
+Before deploying, test WebRTC support:
+
+- Visit [browserleaks.com/webrtc](https://browserleaks.com/webrtc)
+- Verify STUN/TURN connectivity
+- Check for IP leaks if privacy is important
+
+## Debugging P2P Issues
+
+### Enable Debug Logging
+
+```javascript
+const db = await gdb('my-app', {
+  rtc: {
+    cells: { debug: true }  // Logs mesh topology
+  }
+})
+```
+
+### Common Issues and Solutions
+
+<CardGroup cols={2}>
+  <Card title="Peers Not Connecting" icon="link-slash">
+    **Causes:**
+    - Relay server down
+    - Firewall blocking WebRTC
+    - No TURN server configured
+    
+    **Solutions:**
+    - Check relay status
+    - Add TURN servers
+    - Test on different network
+  </Card>
+  
+  <Card title="Slow Sync" icon="hourglass">
+    **Causes:**
+    - High latency to relays
+    - Large oplog backlog
+    - Bandwidth constraints
+    
+    **Solutions:**
+    - Use geographically closer relays
+    - Reduce `oplogSize`
+    - Enable cellular mesh for large networks
+  </Card>
+  
+  <Card title="Frequent Disconnects" icon="plug">
+    **Causes:**
+    - Unreliable network
+    - Mobile browser in background
+    - NAT timeout
+    
+    **Solutions:**
+    - Implement keepalive
+    - Use multiple TURN servers
+    - Handle reconnection gracefully
+  </Card>
+  
+  <Card title="Data Not Syncing" icon="database">
+    **Causes:**
+    - Security Manager blocking operations
+    - Conflict resolution discarding updates
+    - Middleware filtering data
+    
+    **Solutions:**
+    - Check user permissions
+    - Verify HLC timestamps
+    - Review middleware logic
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="P2P Sync Concepts" icon="network-wired" href="/concepts/p2p-sync">
+    Understand how delta sync and full-state fallback work
+  </Card>
+  
+  <Card title="Security Model" icon="shield" href="/concepts/security-model">
+    Configure RBAC and cryptographic verification
+  </Card>
+  
+  <Card title="Chat Example" icon="comments" href="/examples/chat-app">
+    See P2P networking in a real-time chat app
+  </Card>
+  
+  <Card title="Video Streaming Example" icon="video" href="/examples/overview">
+    Build a video conferencing app with GenosRTC
+  </Card>
+</CardGroup>

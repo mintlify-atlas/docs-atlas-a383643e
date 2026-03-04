@@ -1,0 +1,183 @@
+---
+title: "Nostr Signaling"
+description: "Run your own Nostr relay for GenosDB peer discovery"
+---
+
+GenosDB/GenosRTC uses the Nostr relay network for peer discovery and signaling. By running your own Nostr relay, you get full control, better privacy, and improved reliability.
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Full Control" icon="crown">
+    Complete ownership of signaling infrastructure
+  </Card>
+  <Card title="Privacy" icon="eye-slash">
+    Signaling metadata stays on your infrastructure
+  </Card>
+  <Card title="Reliability" icon="shield-check">
+    No dependency on public relay availability
+  </Card>
+  <Card title="Customization" icon="sliders">
+    Configure access control, rate limiting, and retention policies
+  </Card>
+</CardGroup>
+
+## Quick Start (Under 5 Minutes)
+
+This guide deploys a Nostr relay using **nostream** on an Ubuntu VM with Nginx and HTTPS.
+
+### Prerequisites
+
+- Cloud VM (DigitalOcean, Linode, AWS, etc.)
+- Domain name with DNS access
+- Basic server administration familiarity
+
+### Step 1: Provision VM
+
+Create and access an Ubuntu server, then install packages:
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm nginx certbot python3-certbot-nginx git tmux curl
+```
+
+### Step 2: Install Docker
+
+```bash
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+Verify:
+```bash
+docker --version
+npm --version
+node --version
+```
+
+### Step 3: Clone nostream
+
+```bash
+git clone https://github.com/Cameri/nostream.git
+cd nostream
+```
+
+### Step 4: Configure Nginx
+
+Remove default config:
+```bash
+sudo rm -f /etc/nginx/sites-available/default
+```
+
+Create new config:
+```bash
+sudo nano /etc/nginx/sites-available/default
+```
+
+Insert:
+```nginx
+server {
+    server_name relay.example.com;
+
+    location / {
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+
+        proxy_pass http://127.0.0.1:8008;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Test and reload:
+```bash
+sudo nginx -t
+sudo service nginx restart
+```
+
+### Step 5: Configure DNS
+
+Add an **A record** pointing `relay.example.com` to your VM IP.
+
+### Step 6: Enable HTTPS with Certbot
+
+```bash
+sudo certbot --nginx -d relay.example.com
+```
+
+### Step 7: Start the Relay
+
+```bash
+tmux
+cd ~/nostream
+npm run docker:compose:start
+```
+
+**Detach**: `Ctrl+B`, then `D`  
+**Reattach**: `tmux a`
+
+### Step 8: Test Your Relay
+
+Use any WebSocket testing tool to connect:
+
+```
+wss://relay.example.com
+```
+
+If the connection succeeds, your relay is live!
+
+## Use Your Relay in GenosDB
+
+```javascript
+import { gdb } from "genosdb";
+
+const db = await gdb("my-db", {
+  rtc: {
+    relayUrls: [
+      "wss://relay.example.com",
+      "wss://another-relay.example.org" // Optional backup
+    ]
+  }
+});
+```
+
+## Production Considerations
+
+<AccordionGroup>
+  <Accordion title="Event Limits and Retention">
+    Configure in `nostream` settings to limit storage and manage retention policies.
+  </Accordion>
+  
+  <Accordion title="Authentication and Access Control">
+    Restrict relay access to known clients using authentication mechanisms.
+  </Accordion>
+  
+  <Accordion title="Monitoring and Logging">
+    Set up monitoring for relay health, connection counts, and error rates.
+  </Accordion>
+  
+  <Accordion title="Regular Updates">
+    Keep Docker images and dependencies updated for security patches.
+  </Accordion>
+</AccordionGroup>
+
+More details: [nostream GitHub](https://github.com/Cameri/nostream)
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="GenosRTC Architecture" icon="satellite-dish" href="/advanced/p2p/genosrtc-architecture">
+    P2P networking overview
+  </Card>
+  <Card title="Fallback Server" icon="server" href="/advanced/p2p/fallback-server">
+    Optional reliability enhancement
+  </Card>
+</CardGroup>

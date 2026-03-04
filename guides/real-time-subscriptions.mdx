@@ -1,0 +1,576 @@
+---
+title: Real-Time Subscriptions
+description: Set up reactive queries with callbacks to receive live updates when data changes in GenosDB
+---
+
+## Overview
+
+GenosDB's real-time subscription system allows you to listen for live updates to your data. When you add a callback to `get()` or `map()`, your application receives instant notifications whenever matching data changes.
+
+<Info>
+Subscriptions work both locally (within the same browser) and across peers in P2P mode.
+</Info>
+
+## Basic Subscription Pattern
+
+Both `get()` and `map()` support reactive mode:
+
+```javascript
+import { gdb } from 'genosdb'
+
+const db = await gdb('my-app', { rtc: true })
+
+// Subscribe to changes with a callback
+const { result, unsubscribe } = await db.get(
+  'user:alice',
+  (node) => {
+    console.log('User updated:', node)
+  }
+)
+
+// Don't forget to clean up!
+unsubscribe()
+```
+
+## Reactive `get`: Single Node Subscriptions
+
+### Basic Usage
+
+```javascript
+const { result, unsubscribe } = await db.get(
+  'counter',
+  (node) => {
+    if (node) {
+      console.log('Counter value:', node.value.count)
+    } else {
+      console.log('Counter was deleted')
+    }
+  }
+)
+
+// Initial value is also available
+console.log('Initial:', result)
+```
+
+### When Callbacks Fire
+
+Callbacks are invoked:
+
+<Steps>
+  <Step title="On Initial Load">
+    Called immediately with the current node state (or `null` if it doesn't exist).
+  </Step>
+  
+  <Step title="On Updates">
+    Called whenever the node's value changes via `put()`.
+  </Step>
+  
+  <Step title="On Deletion">
+    Called with `null` when the node is deleted via `remove()`.
+  </Step>
+</Steps>
+
+### Complete Example
+
+```javascript
+const db = await gdb('todo-app', { rtc: true })
+
+// Subscribe to a todo item
+const { unsubscribe } = await db.get(
+  'todo:1',
+  (todo) => {
+    if (todo === null) {
+      // Todo was deleted
+      removeTodoFromUI('todo:1')
+    } else {
+      // Todo was created or updated
+      updateTodoInUI(todo.id, todo.value)
+    }
+  }
+)
+
+// On another peer or tab
+await db.put({ text: 'Buy milk', completed: true }, 'todo:1')
+// Callback fires on all subscribers
+
+await db.remove('todo:1')
+// Callback fires with null
+
+// Clean up when component unmounts
+unsubscribe()
+```
+
+## Reactive `map`: Query Subscriptions
+
+### Basic Usage
+
+```javascript
+const { results, unsubscribe } = await db.map(
+  { query: { type: 'todo', completed: false } },
+  ({ id, value, action }) => {
+    console.log(`Action: ${action}, ID: ${id}`, value)
+  }
+)
+
+// Initial results
+console.log('Active todos:', results)
+```
+
+### Action Types
+
+The callback receives an event object with an `action` field:
+
+<CardGroup cols={2}>
+  <Card title="initial" icon="play">
+    Fired for each node that matches the query when subscription starts.
+    
+    Provides the initial dataset.
+  </Card>
+  
+  <Card title="added" icon="plus">
+    A new node matching the query was created.
+    
+    Example: New todo added
+  </Card>
+  
+  <Card title="updated" icon="pen">
+    An existing matching node was modified.
+    
+    Example: Todo text changed
+  </Card>
+  
+  <Card title="removed" icon="trash">
+    A matching node was deleted or no longer matches the query.
+    
+    Example: Todo marked complete (filtered out)
+  </Card>
+</CardGroup>
+
+### Event Object Structure
+
+```javascript
+await db.map(
+  { query: { type: 'post' } },
+  (event) => {
+    console.log({
+      id: event.id,              // Node ID
+      value: event.value,        // Node data (null for removed)
+      action: event.action,      // 'initial' | 'added' | 'updated' | 'removed'
+      edges: event.edges,        // Outgoing links
+      timestamp: event.timestamp // HLC timestamp
+    })
+  }
+)
+```
+
+<Tip>
+**Best practice:** Destructure only the fields you need:
+
+```javascript
+({ id, value, action }) => { ... }
+```
+</Tip>
+
+## Real-Time Todo List Example
+
+```javascript
+const db = await gdb('todo-app', { rtc: true })
+const todoList = document.getElementById('todo-list')
+
+// Subscribe to all active todos
+const { unsubscribe } = await db.map(
+  {
+    query: { type: 'todo', completed: false },
+    field: 'createdAt',
+    order: 'desc'
+  },
+  ({ id, value, action }) => {
+    if (action === 'initial' || action === 'added') {
+      // Add todo to UI
+      const li = document.createElement('li')
+      li.id = id
+      li.textContent = value.text
+      todoList.appendChild(li)
+    }
+    
+    else if (action === 'updated') {
+      // Update todo in UI
+      const li = document.getElementById(id)
+      if (li) li.textContent = value.text
+    }
+    
+    else if (action === 'removed') {
+      // Remove todo from UI
+      const li = document.getElementById(id)
+      if (li) li.remove()
+    }
+  }
+)
+
+// Later: cleanup
+unsubscribe()
+```
+
+## Multiple Simultaneous Subscriptions
+
+You can have multiple active subscriptions:
+
+```javascript
+// Subscribe to active todos
+const activeSub = await db.map(
+  { query: { type: 'todo', completed: false } },
+  updateActiveTodoList
+)
+
+// Subscribe to completed todos
+const completedSub = await db.map(
+  { query: { type: 'todo', completed: true } },
+  updateCompletedTodoList
+)
+
+// Subscribe to a specific user
+const userSub = await db.get(
+  'user:current',
+  updateUserProfile
+)
+
+// Cleanup all subscriptions
+activeSub.unsubscribe()
+completedSub.unsubscribe()
+userSub.unsubscribe()
+```
+
+## Subscriptions with Graph Traversal
+
+```javascript
+// Subscribe to all files under "Documents" folder
+const { unsubscribe } = await db.map(
+  {
+    query: {
+      type: 'folder',
+      name: 'Documents',
+      $edge: { type: 'file' }
+    }
+  },
+  ({ id, value, action }) => {
+    if (action === 'added') {
+      console.log('New file added:', value.name)
+    } else if (action === 'removed') {
+      console.log('File removed:', id)
+    }
+  }
+)
+```
+
+<Info>
+Graph traversal subscriptions update when:
+- Links are created/removed
+- Descendant nodes are added/modified/deleted
+- Starting nodes are modified
+</Info>
+
+## Managing Subscriptions in React
+
+### Using useEffect
+
+```javascript
+import { useEffect, useState } from 'react'
+import { gdb } from 'genosdb'
+
+function TodoList() {
+  const [todos, setTodos] = useState([])
+  
+  useEffect(() => {
+    let unsubscribe
+    
+    async function subscribe() {
+      const db = await gdb('todo-app', { rtc: true })
+      
+      const { results, unsubscribe: unsub } = await db.map(
+        { query: { type: 'todo', completed: false } },
+        ({ id, value, action }) => {
+          if (action === 'initial' || action === 'added') {
+            setTodos(prev => [...prev, { id, ...value }])
+          } else if (action === 'updated') {
+            setTodos(prev => prev.map(t => 
+              t.id === id ? { id, ...value } : t
+            ))
+          } else if (action === 'removed') {
+            setTodos(prev => prev.filter(t => t.id !== id))
+          }
+        }
+      )
+      
+      // Set initial data
+      setTodos(results.map(r => ({ id: r.id, ...r.value })))
+      unsubscribe = unsub
+    }
+    
+    subscribe()
+    
+    // Cleanup on unmount
+    return () => unsubscribe?.()
+  }, [])
+  
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Custom Hook
+
+```javascript
+function useRealtimeQuery(query) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    let unsubscribe
+    
+    async function subscribe() {
+      const db = await gdb('my-app', { rtc: true })
+      
+      const { results, unsubscribe: unsub } = await db.map(
+        query,
+        ({ id, value, action }) => {
+          if (action === 'added') {
+            setData(prev => [...prev, { id, ...value }])
+          } else if (action === 'updated') {
+            setData(prev => prev.map(item =>
+              item.id === id ? { id, ...value } : item
+            ))
+          } else if (action === 'removed') {
+            setData(prev => prev.filter(item => item.id !== id))
+          }
+        }
+      )
+      
+      setData(results.map(r => ({ id: r.id, ...r.value })))
+      setLoading(false)
+      unsubscribe = unsub
+    }
+    
+    subscribe()
+    return () => unsubscribe?.()
+  }, [JSON.stringify(query)])
+  
+  return { data, loading }
+}
+
+// Usage
+function MyComponent() {
+  const { data: todos, loading } = useRealtimeQuery({
+    query: { type: 'todo', completed: false }
+  })
+  
+  if (loading) return <div>Loading...</div>
+  
+  return (
+    <ul>
+      {todos.map(todo => <li key={todo.id}>{todo.text}</li>)}
+    </ul>
+  )
+}
+```
+
+## Subscriptions in Vue
+
+```javascript
+import { ref, onMounted, onUnmounted } from 'vue'
+import { gdb } from 'genosdb'
+
+export default {
+  setup() {
+    const todos = ref([])
+    let unsubscribe
+    
+    onMounted(async () => {
+      const db = await gdb('todo-app', { rtc: true })
+      
+      const { results, unsubscribe: unsub } = await db.map(
+        { query: { type: 'todo' } },
+        ({ id, value, action }) => {
+          if (action === 'added') {
+            todos.value.push({ id, ...value })
+          } else if (action === 'updated') {
+            const index = todos.value.findIndex(t => t.id === id)
+            if (index !== -1) {
+              todos.value[index] = { id, ...value }
+            }
+          } else if (action === 'removed') {
+            const index = todos.value.findIndex(t => t.id === id)
+            if (index !== -1) {
+              todos.value.splice(index, 1)
+            }
+          }
+        }
+      )
+      
+      todos.value = results.map(r => ({ id: r.id, ...r.value }))
+      unsubscribe = unsub
+    })
+    
+    onUnmounted(() => {
+      unsubscribe?.()
+    })
+    
+    return { todos }
+  }
+}
+```
+
+## Performance Considerations
+
+### Minimize Callback Work
+
+```javascript
+// ❌ Bad: Expensive operation in callback
+await db.map(
+  { query: { type: 'post' } },
+  ({ value }) => {
+    // Heavy DOM manipulation or computation
+    expensiveOperation(value)
+  }
+)
+
+// ✅ Good: Batch updates
+let updateQueue = []
+let updateTimer
+
+await db.map(
+  { query: { type: 'post' } },
+  ({ id, value, action }) => {
+    updateQueue.push({ id, value, action })
+    
+    clearTimeout(updateTimer)
+    updateTimer = setTimeout(() => {
+      processBatch(updateQueue)
+      updateQueue = []
+    }, 100)
+  }
+)
+```
+
+### Limit Active Subscriptions
+
+```javascript
+// ❌ Avoid: Too many subscriptions
+for (let id of todoIds) {
+  await db.get(id, updateCallback)  // 100 subscriptions!
+}
+
+// ✅ Better: Single subscription with filtering
+await db.map(
+  { query: { type: 'todo', id: { $in: todoIds } } },
+  handleUpdate
+)
+```
+
+### Unsubscribe When Done
+
+```javascript
+// Always clean up!
+const { unsubscribe } = await db.map({ ... }, callback)
+
+// On component unmount, route change, etc.
+unsubscribe()
+```
+
+<Warning>
+Failing to unsubscribe causes memory leaks. Always call `unsubscribe()` when the subscription is no longer needed.
+</Warning>
+
+## Explicit Realtime Mode
+
+You can explicitly enable/disable realtime mode:
+
+```javascript
+// Force realtime mode (even without callback)
+await db.map({
+  query: { type: 'user' },
+  realtime: true  // Explicit
+})
+
+// Disable realtime mode (even with callback)
+await db.map(
+  { query: { type: 'user' }, realtime: false },
+  () => {}  // Callback won't fire
+)
+```
+
+## Initial Data vs. Live Updates
+
+```javascript
+const { results, unsubscribe } = await db.map(
+  { query: { type: 'post' } },
+  ({ action, value }) => {
+    // This fires for:
+    // 1. Each existing post (action: 'initial')
+    // 2. Future changes (action: 'added'/'updated'/'removed')
+    console.log(action, value)
+  }
+)
+
+// results contains the initial snapshot
+console.log('Initial posts:', results)
+
+// Callback will continue firing for live updates
+```
+
+<Tip>
+For UI rendering, you can often ignore the `results` array and rely solely on the callback to build your state incrementally.
+</Tip>
+
+## Debugging Subscriptions
+
+```javascript
+let subscriptionCount = 0
+
+function trackSubscription(name) {
+  subscriptionCount++
+  console.log(`[${name}] Subscribed (total: ${subscriptionCount})`)
+  
+  return () => {
+    subscriptionCount--
+    console.log(`[${name}] Unsubscribed (total: ${subscriptionCount})`)
+  }
+}
+
+const { unsubscribe: unsub1 } = await db.map({ ... }, callback)
+const cleanup1 = trackSubscription('todo-list')
+
+const { unsubscribe: unsub2 } = await db.get('user:1', callback)
+const cleanup2 = trackSubscription('user-profile')
+
+// Later
+unsub1()
+cleanup1()
+
+unsub2()
+cleanup2()
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Queries" icon="magnifying-glass" href="/guides/queries">
+    Learn query operators for filtering subscriptions
+  </Card>
+  
+  <Card title="Graph Traversal" icon="diagram-project" href="/guides/graph-traversal">
+    Subscribe to graph traversal results
+  </Card>
+  
+  <Card title="P2P Sync" icon="network-wired" href="/concepts/p2p-sync">
+    Understand how real-time updates sync across peers
+  </Card>
+  
+  <Card title="Todo App Example" icon="list-check" href="/examples/todo-app">
+    See subscriptions in a complete application
+  </Card>
+</CardGroup>

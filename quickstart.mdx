@@ -1,80 +1,408 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first real-time app with GenosDB in 5 minutes
 ---
 
-## Get started in three steps
+# Quickstart Tutorial
 
-Get your documentation site running locally and make your first customization.
+In this tutorial, you'll build a real-time todo application that syncs automatically across multiple browser tabs and devices. No backend server required!
 
-### Step 1: Set up your local environment
+## What You'll Build
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+A todo app with:
+- Real-time synchronization across tabs and devices
+- Persistent local storage
+- Automatic conflict resolution
+- Reactive UI updates
 
-### Step 2: Deploy your changes
+## Step 1: Set Up Your HTML
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Create an `index.html` file:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+```html index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenosDB Todo App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    input[type="text"] {
+      width: 70%;
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 10px;
+      margin: 5px 0;
+      background: #f0f0f0;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .completed {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>Real-Time Todo App</h1>
+  <div>
+    <input type="text" id="taskInput" placeholder="Enter a new task">
+    <button id="addBtn">Add</button>
+  </div>
+  <ul id="taskList"></ul>
+  
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Step 2: Initialize GenosDB
 
-### Step 3: Go live
+Create an `app.js` file and initialize the database:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```javascript app.js
+import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
 
-## Next steps
+// Initialize database with P2P sync enabled
+const db = await gdb('todo-app', { rtc: true });
 
-Now that you have your docs running, explore these key features:
+console.log('Database initialized!');
+```
 
-<CardGroup cols={2}>
+<Info>
+The `rtc: true` option enables real-time peer-to-peer synchronization. Remove it if you only need local storage.
+</Info>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## Step 3: Store and Query Data
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+Let's add the ability to create and list todos:
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+```javascript app.js
+import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+const db = await gdb('todo-app', { rtc: true });
+const taskInput = document.getElementById('taskInput');
+const addBtn = document.getElementById('addBtn');
+const taskList = document.getElementById('taskList');
 
-</CardGroup>
+// Add a new todo
+async function addTodo(text) {
+  await db.put({
+    type: 'todo',
+    text: text,
+    completed: false,
+    timestamp: Date.now()
+  });
+  taskInput.value = ''; // Clear input
+}
+
+// Listen for button click
+addBtn.addEventListener('click', () => {
+  const text = taskInput.value.trim();
+  if (text) addTodo(text);
+});
+
+// Listen for Enter key
+taskInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    const text = taskInput.value.trim();
+    if (text) addTodo(text);
+  }
+});
+```
+
+## Step 4: Real-Time Subscriptions
+
+Now let's make the UI update automatically when todos change:
+
+```javascript app.js
+// ... previous code ...
+
+// Track rendered todos to avoid duplicates
+const renderedTodos = new Map();
+
+// Subscribe to real-time todo updates
+await db.map(
+  { 
+    query: { type: 'todo' },
+    field: 'timestamp',
+    order: 'asc'
+  },
+  ({ id, value, action }) => {
+    if (action === 'added' || action === 'initial') {
+      renderTodo(id, value);
+    } else if (action === 'updated') {
+      updateTodo(id, value);
+    } else if (action === 'removed') {
+      removeTodo(id);
+    }
+  }
+);
+
+// Render a todo item
+function renderTodo(id, todo) {
+  if (renderedTodos.has(id)) return;
+  
+  const li = document.createElement('li');
+  li.id = id;
+  li.innerHTML = `
+    <span class="${todo.completed ? 'completed' : ''}">${todo.text}</span>
+    <div>
+      <button onclick="toggleTodo('${id}')">Toggle</button>
+      <button onclick="deleteTodo('${id}')">Delete</button>
+    </div>
+  `;
+  
+  taskList.appendChild(li);
+  renderedTodos.set(id, li);
+}
+
+// Update a todo item
+function updateTodo(id, todo) {
+  const li = renderedTodos.get(id);
+  if (li) {
+    const span = li.querySelector('span');
+    span.textContent = todo.text;
+    span.className = todo.completed ? 'completed' : '';
+  }
+}
+
+// Remove a todo item
+function removeTodo(id) {
+  const li = renderedTodos.get(id);
+  if (li) {
+    li.remove();
+    renderedTodos.delete(id);
+  }
+}
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+The `action` parameter tells you whether a todo was `added`, `updated`, or `removed`. The `initial` action fires for existing todos when you first subscribe.
 </Note>
+
+## Step 5: Toggle and Delete
+
+Add functions to toggle completion and delete todos:
+
+```javascript app.js
+// ... previous code ...
+
+// Toggle todo completion
+window.toggleTodo = async (id) => {
+  const { result } = await db.get(id);
+  if (result) {
+    await db.put(
+      { ...result.value, completed: !result.value.completed },
+      id
+    );
+  }
+};
+
+// Delete a todo
+window.deleteTodo = async (id) => {
+  await db.remove(id);
+};
+```
+
+## Complete Code
+
+Here's the full `app.js` file:
+
+```javascript app.js
+import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
+
+const db = await gdb('todo-app', { rtc: true });
+const taskInput = document.getElementById('taskInput');
+const addBtn = document.getElementById('addBtn');
+const taskList = document.getElementById('taskList');
+const renderedTodos = new Map();
+
+// Add a new todo
+async function addTodo(text) {
+  await db.put({
+    type: 'todo',
+    text: text,
+    completed: false,
+    timestamp: Date.now()
+  });
+  taskInput.value = '';
+}
+
+// Event listeners
+addBtn.addEventListener('click', () => {
+  const text = taskInput.value.trim();
+  if (text) addTodo(text);
+});
+
+taskInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    const text = taskInput.value.trim();
+    if (text) addTodo(text);
+  }
+});
+
+// Subscribe to real-time updates
+await db.map(
+  { 
+    query: { type: 'todo' },
+    field: 'timestamp',
+    order: 'asc'
+  },
+  ({ id, value, action }) => {
+    if (action === 'added' || action === 'initial') {
+      renderTodo(id, value);
+    } else if (action === 'updated') {
+      updateTodo(id, value);
+    } else if (action === 'removed') {
+      removeTodo(id);
+    }
+  }
+);
+
+// Render functions
+function renderTodo(id, todo) {
+  if (renderedTodos.has(id)) return;
+  
+  const li = document.createElement('li');
+  li.id = id;
+  li.innerHTML = `
+    <span class="${todo.completed ? 'completed' : ''}">${todo.text}</span>
+    <div>
+      <button onclick="toggleTodo('${id}')">Toggle</button>
+      <button onclick="deleteTodo('${id}')">Delete</button>
+    </div>
+  `;
+  
+  taskList.appendChild(li);
+  renderedTodos.set(id, li);
+}
+
+function updateTodo(id, todo) {
+  const li = renderedTodos.get(id);
+  if (li) {
+    const span = li.querySelector('span');
+    span.textContent = todo.text;
+    span.className = todo.completed ? 'completed' : '';
+  }
+}
+
+function removeTodo(id) {
+  const li = renderedTodos.get(id);
+  if (li) {
+    li.remove();
+    renderedTodos.delete(id);
+  }
+}
+
+// Global functions for onclick handlers
+window.toggleTodo = async (id) => {
+  const { result } = await db.get(id);
+  if (result) {
+    await db.put(
+      { ...result.value, completed: !result.value.completed },
+      id
+    );
+  }
+};
+
+window.deleteTodo = async (id) => {
+  await db.remove(id);
+};
+```
+
+## Test Your App
+
+<Steps>
+  <Step title="Open in Browser">
+    Open `index.html` in your browser. Add some todos.
+  </Step>
+  
+  <Step title="Test Persistence">
+    Refresh the page. Your todos should still be there!
+  </Step>
+  
+  <Step title="Test Real-Time Sync">
+    Open the same page in another tab. Changes in one tab appear instantly in the other.
+  </Step>
+  
+  <Step title="Test P2P Sync">
+    Open the page on another device on the same network. Todos sync automatically!
+  </Step>
+</Steps>
+
+<Tip>
+Open the browser console to see GenosDB logs. You can monitor peer connections and sync activity.
+</Tip>
+
+## What Just Happened?
+
+1. **Local-First Storage**: GenosDB stores all data locally using OPFS (or IndexedDB as fallback)
+2. **Reactive Queries**: The `db.map()` callback fires whenever data changes
+3. **P2P Sync**: With `rtc: true`, changes sync automatically via WebRTC
+4. **Conflict Resolution**: If two peers edit the same todo, Last-Write-Wins (LWW) resolves it
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CRUD Operations" icon="database" href="/guides/crud-operations">
+    Learn all the database operations in depth
+  </Card>
+  
+  <Card title="Queries" icon="magnifying-glass" href="/guides/queries">
+    Master advanced query operators and filters
+  </Card>
+  
+  <Card title="P2P Setup" icon="network-wired" href="/guides/p2p-setup">
+    Configure custom relays and TURN servers
+  </Card>
+  
+  <Card title="Graph Traversal" icon="project-diagram" href="/guides/graph-traversal">
+    Use the $edge operator for recursive queries
+  </Card>
+</CardGroup>
+
+## Live Examples
+
+Explore more working examples:
+
+- [Advanced Todo App](https://estebanrfp.github.io/gdb/examples/advanced-todolist.html) - With filters and inline editing
+- [Real-Time Chat](https://estebanrfp.github.io/gdb/examples/chat.html) - 9 lines of code!
+- [Kanban Board](https://estebanrfp.github.io/gdb/examples/kanban.html) - Drag-and-drop task management
+
+## Troubleshooting
+
+### Todos don't persist
+
+Make sure you're using a modern browser with OPFS support (Chrome 86+, Firefox 111+, Safari 15.2+).
+
+### P2P sync not working
+
+Check that both peers are using the same database name (`'todo-app'`). WebRTC may also be blocked by some firewalls.
+
+### Todos appear multiple times
+
+Ensure you're checking `if (renderedTodos.has(id)) return;` in your render function to avoid duplicates.
+
+<Info>
+Have questions? Join the discussion on [GitHub](https://github.com/estebanrfp/gdb/discussions)!
+</Info>

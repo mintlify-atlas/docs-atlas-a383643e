@@ -1,0 +1,427 @@
+---
+title: 'Geo Module'
+description: 'Geo-spatial queries with $near and $bbox operators'
+---
+
+## Overview
+
+The Geo module enables location-based queries in GenosDB using two powerful operators:
+
+- **$near**: Find nodes within a radius of a point
+- **$bbox**: Find nodes within a rectangular bounding box
+
+Perfect for maps, location services, and spatial data analysis.
+
+## Enabling the Module
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-geo-database", { geo: true })
+
+console.log("Geo-spatial operators active")
+```
+
+## Coordinate Formats
+
+The module supports flexible coordinate storage:
+
+### Flat Structure
+
+```javascript
+await db.put({
+  name: "Point A",
+  latitude: 40.7128,
+  longitude: -74.0060
+})
+```
+
+### Nested Structure
+
+```javascript
+await db.put({
+  name: "Point B",
+  location: {
+    latitude: 40.7580,
+    longitude: -73.9855
+  }
+})
+```
+
+Both formats work seamlessly with geo operators.
+
+## $near Operator
+
+Find nodes within a specified radius (in kilometers) of a point.
+
+### Basic Syntax
+
+```javascript
+const { results } = await db.map({
+  query: {
+    location: {
+      $near: {
+        latitude: 40.7128,
+        longitude: -74.0060,
+        radius: 5 // kilometers
+      }
+    }
+  }
+})
+```
+
+### Examples
+
+#### Find Nearby Landmarks
+
+```javascript
+// Add landmarks
+await db.put({
+  name: "Times Square",
+  type: "Landmark",
+  location: { latitude: 40.7580, longitude: -73.9855 }
+})
+
+await db.put({
+  name: "Central Park",
+  type: "Park",
+  location: { latitude: 40.7850, longitude: -73.9682 }
+})
+
+await db.put({
+  name: "Statue of Liberty",
+  type: "Landmark",
+  location: { latitude: 40.6892, longitude: -74.0445 }
+})
+
+// Find landmarks within 5km of Times Square
+const userLocation = {
+  latitude: 40.7580,
+  longitude: -73.9855
+}
+
+const { results } = await db.map({
+  query: {
+    type: "Landmark",
+    location: {
+      $near: { ...userLocation, radius: 5 }
+    }
+  }
+})
+
+console.log("Nearby landmarks:", results)
+```
+
+#### Proximity Search
+
+```javascript
+const findNearby = async (lat, lng, radiusKm, type = null) => {
+  const query = {
+    location: {
+      $near: {
+        latitude: lat,
+        longitude: lng,
+        radius: radiusKm
+      }
+    }
+  }
+  
+  if (type) {
+    query.type = type
+  }
+  
+  const { results } = await db.map({ query })
+  return results
+}
+
+// Find restaurants within 2km
+const restaurants = await findNearby(40.7128, -74.0060, 2, "Restaurant")
+
+// Find anything within 10km
+const allNearby = await findNearby(40.7128, -74.0060, 10)
+```
+
+## $bbox Operator
+
+Find nodes within a rectangular bounding box defined by min/max latitude and longitude.
+
+### Basic Syntax
+
+```javascript
+const { results } = await db.map({
+  query: {
+    location: {
+      $bbox: {
+        minLat: 40.70,
+        maxLat: 40.88,
+        minLng: -74.02,
+        maxLng: -73.93
+      }
+    }
+  }
+})
+```
+
+### Examples
+
+#### Filter by Area
+
+```javascript
+// Manhattan boundaries (approximate)
+const manhattanBounds = {
+  minLat: 40.70,
+  maxLat: 40.88,
+  minLng: -74.02,
+  maxLng: -73.93
+}
+
+const { results } = await db.map({
+  query: {
+    location: { $bbox: manhattanBounds }
+  }
+})
+
+console.log("Locations in Manhattan:", results)
+```
+
+#### Map Viewport Query
+
+```javascript
+class MapController {
+  async updateViewport(bounds) {
+    const { results } = await db.map({
+      query: {
+        type: "POI", // Points of Interest
+        location: {
+          $bbox: {
+            minLat: bounds.south,
+            maxLat: bounds.north,
+            minLng: bounds.west,
+            maxLng: bounds.east
+          }
+        }
+      }
+    })
+    
+    this.renderMarkers(results)
+  }
+  
+  renderMarkers(locations) {
+    locations.forEach(loc => {
+      // Add marker to map
+      console.log(`Marker: ${loc.value.name}`, loc.value.location)
+    })
+  }
+}
+```
+
+## Combining Operators
+
+### Geo + Type Filter
+
+```javascript
+// Find parks in a specific area
+const { results } = await db.map({
+  query: {
+    type: "Park",
+    location: {
+      $bbox: {
+        minLat: 40.70,
+        maxLat: 40.88,
+        minLng: -74.02,
+        maxLng: -73.93
+      }
+    }
+  }
+})
+```
+
+### Geo + Multiple Conditions
+
+```javascript
+// Find open restaurants within 3km
+const { results } = await db.map({
+  query: {
+    type: "Restaurant",
+    open: true,
+    rating: { $gte: 4.0 },
+    location: {
+      $near: {
+        latitude: 40.7128,
+        longitude: -74.0060,
+        radius: 3
+      }
+    }
+  },
+  field: "rating",
+  order: "desc"
+})
+```
+
+## Real-Time Geo Queries
+
+### Live Location Tracking
+
+```javascript
+const { unsubscribe } = await db.map(
+  {
+    query: {
+      type: "Delivery",
+      status: "in-transit",
+      location: {
+        $near: {
+          latitude: userLat,
+          longitude: userLng,
+          radius: 10
+        }
+      }
+    }
+  },
+  ({ id, value, action }) => {
+    if (action === "added") {
+      console.log(`New delivery nearby: ${value.orderId}`)
+      showNotification(value)
+    }
+    
+    if (action === "updated") {
+      console.log(`Delivery ${id} position updated`)
+      updateMarker(id, value.location)
+    }
+    
+    if (action === "removed") {
+      console.log(`Delivery ${id} left the area`)
+      removeMarker(id)
+    }
+  }
+)
+```
+
+### Dynamic User Location
+
+```javascript
+class LocationTracker {
+  constructor(db) {
+    this.db = db
+    this.currentQuery = null
+  }
+  
+  async trackNearby(radiusKm) {
+    // Get user's current location
+    const position = await this.getCurrentPosition()
+    
+    // Unsubscribe from previous query
+    if (this.currentQuery) {
+      this.currentQuery.unsubscribe()
+    }
+    
+    // Subscribe to new location
+    const { unsubscribe } = await this.db.map(
+      {
+        query: {
+          type: "Friend",
+          status: "online",
+          location: {
+            $near: {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              radius: radiusKm
+            }
+          }
+        }
+      },
+      ({ value, action }) => {
+        if (action === "added") {
+          this.showFriendNearby(value)
+        }
+      }
+    )
+    
+    this.currentQuery = { unsubscribe }
+  }
+  
+  getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject)
+    })
+  }
+  
+  showFriendNearby(friend) {
+    console.log(`${friend.name} is nearby!`)
+    // Show notification
+  }
+}
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Store Locator" icon="map-marker">
+    Find nearest stores or branches
+  </Card>
+  <Card title="Delivery Tracking" icon="truck">
+    Monitor deliveries in real-time
+  </Card>
+  <Card title="Social Check-ins" icon="users">
+    See friends nearby
+  </Card>
+  <Card title="Map Applications" icon="map">
+    Display POIs in viewport
+  </Card>
+  <Card title="Ride Sharing" icon="car">
+    Match drivers and passengers
+  </Card>
+  <Card title="Real Estate" icon="home">
+    Browse properties by area
+  </Card>
+</CardGroup>
+
+## Distance Calculation
+
+The module uses the Haversine formula for accurate distance calculation:
+
+- Accounts for Earth's curvature
+- Accurate for short and medium distances
+- Returns distances in kilometers
+
+## Performance Tips
+
+<Tip>
+**Combine with other filters**: Reduce the search space before geo filtering:
+
+```javascript
+// ✅ Efficient
+{
+  type: "Restaurant",
+  open: true,
+  location: { $near: { ...coords, radius: 5 } }
+}
+
+// ❌ Less efficient (searches all types)
+{
+  location: { $near: { ...coords, radius: 5 } }
+}
+```
+</Tip>
+
+<Tip>
+**Use appropriate radius**: Smaller radius = faster queries:
+
+```javascript
+// ✅ Fast (5km)
+radius: 5
+
+// ⚠️ Slower (100km)
+radius: 100
+```
+</Tip>
+
+## Live Example
+
+[**Geolocation with GenosDB**](https://estebanrfp.github.io/gdb/examples/geo.html)
+
+Interactive demo showing geo queries in action.
+
+## Related Operators
+
+- [Comparison Operators](/api/operators/comparison) - Combine with geo queries
+- [Logical Operators](/api/operators/logical) - Complex geo conditions

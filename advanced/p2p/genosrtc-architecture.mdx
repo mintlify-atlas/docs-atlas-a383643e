@@ -1,0 +1,277 @@
+---
+title: "GenosRTC Architecture"
+description: "Decentralized P2P communication module powering GenosDB's real-time sync"
+---
+
+**GenosRTC** is the integrated peer-to-peer communication module within GenosDB, providing a high-level, robust, and decentralized framework for real-time applications directly in the browser.
+
+## Core Architectural Principles
+
+<CardGroup cols={2}>
+  <Card title="Decentralization First" icon="network-wired">
+    Data and media exchange occurs directly between peers with no central bottleneck
+  </Card>
+  <Card title="Simplicity through Abstraction" icon="wand-magic-sparkles">
+    Clean event-driven API hides WebRTC complexity
+  </Card>
+  <Card title="Room-Based Scoping" icon="door-open">
+    Logical "rooms" provide natural containers for peer groups
+  </Card>
+  <Card title="Secure by Design" icon="lock">
+    Built-in E2E encryption for signaling and data channels
+  </Card>
+</CardGroup>
+
+## Architectural Components
+
+### 1. Signaling Layer (Peer Discovery)
+
+GenosRTC uses the **decentralized Nostr network** for signaling instead of custom WebSocket servers.
+
+**Relay Selection Strategy:**
+
+<Steps>
+  <Step title="Immediate Connection">
+    Connects instantly to developer-provided or built-in relays for zero-latency startup
+  </Step>
+  <Step title="Dynamic Fallback">
+    Loads extended relay list from local cache (updated from nostr.watch) and schedules background connections
+  </Step>
+  <Step title="Adaptive Management">
+    Automatically disconnects from non-performant relays (e.g., those requiring Proof-of-Work)
+  </Step>
+</Steps>
+
+**Configuration:**
+
+```javascript
+// Use built-in relays (instant)
+const db = await gdb('mydb', { rtc: true });
+
+// Custom relay list
+const db = await gdb('mydb', {
+  rtc: {
+    relayUrls: [
+      'wss://relay1.example.com',
+      'wss://relay2.example.com'
+    ]
+  }
+});
+```
+
+See [Nostr Signaling Guide](/advanced/p2p/nostr-signaling) for running your own relay.
+
+### 2. P2P Transport Layer (WebRTC)
+
+Manages direct, low-latency `RTCPeerConnection`s between peers:
+
+- **WebRTC ICE Framework**: Traverses NATs and firewalls using STUN/TURN
+- **Encrypted by Default**: DTLS-SRTP encryption for all data/media
+- **Direct Connections**: Peer-to-peer links minimize latency
+
+### 3. Session Management (The Room)
+
+The `db.room` object orchestrates the P2P session lifecycle:
+
+```javascript
+const room = db.room;
+
+// Listen for peers
+room.on('peer:join', (peerId) => {
+  console.log('Peer joined:', peerId);
+});
+
+room.on('peer:leave', (peerId) => {
+  console.log('Peer left:', peerId);
+});
+
+// Get connected peers
+const peers = room.getPeers();
+```
+
+### 4. Communication Abstractions
+
+#### Data Channels
+
+Built on `RTCDataChannel` for structured data:
+
+```javascript
+// Send GenosDB operations
+syncChannel.send({
+  type: 'operation',
+  data: { /* ... */ }
+});
+
+// Create custom channels
+const chatChannel = room.channel('chat');
+chatChannel.on('message', (data, fromPeer) => {
+  console.log('Chat from', fromPeer, ':', data);
+});
+
+chatChannel.send({ text: 'Hello!' });
+```
+
+#### Media Streams
+
+Optimized for real-time audio/video:
+
+```javascript
+// Add local media stream
+const stream = await navigator.mediaDevices.getUserMedia({
+  video: true,
+  audio: true
+});
+
+room.addStream(stream);
+
+// Receive remote streams
+room.on('stream', (stream, peerId) => {
+  const video = document.getElementById('remote-video');
+  video.srcObject = stream;
+});
+```
+
+## Lifecycle of a Peer Connection
+
+<Steps>
+  <Step title="Initialization">
+    Client instantiates GDB with `rtc: true`, joining a specific room
+  </Step>
+  <Step title="Discovery">
+    Connects to Nostr network and subscribes to room topic
+  </Step>
+  <Step title="Signaling Handshake">
+    Exchanges connection offers, answers, and ICE candidates via Nostr
+  </Step>
+  <Step title="Direct Connection">
+    Establishes `RTCPeerConnection` (signaling relay no longer needed)
+  </Step>
+  <Step title="Communication">
+    Uses Data Channels and Media Streams for direct peer-to-peer exchange
+  </Step>
+  <Step title="Disconnection">
+    On leaving, `peer:leave` event broadcasts and connections tear down
+  </Step>
+</Steps>
+
+## Cellular Mesh Architecture
+
+For large-scale applications (100+ peers), GenosRTC offers an optional **Cellular Mesh Overlay**:
+
+```javascript
+const db = await gdb('mydb', {
+  rtc: {
+    cells: true  // Enable cellular mesh
+  }
+});
+```
+
+See [Cellular Mesh](/advanced/cellular-mesh) for complete details.
+
+**Key Benefits:**
+
+- Reduces connections from O(N²) to O(N)
+- Supports 10,000+ peers
+- ~log(N) hop latency vs. single-hop traditional mesh
+- Automatic cell sizing and bridge selection
+
+## Security Model
+
+<AccordionGroup>
+  <Accordion title="Transport Encryption">
+    All WebRTC communications are encrypted using **DTLS** (data) and **SRTP** (media), preventing eavesdropping on P2P links.
+  </Accordion>
+  
+  <Accordion title="End-to-End Encryption (E2EE)">
+    Optional `password` parameter encrypts all signaling and data channel messages:
+    
+    ```javascript
+    const db = await gdb('mydb', {
+      rtc: {
+        password: 'my-secret-key'
+      }
+    });
+    ```
+    
+    Even Nostr relays cannot decipher the application's data.
+  </Accordion>
+  
+  <Accordion title="Cellular Mesh Security">
+    In cellular mode, inter-cell messages maintain encryption. Bridge nodes forward encrypted payloads without accessing plaintext.
+  </Accordion>
+</AccordionGroup>
+
+## Performance Characteristics
+
+| Metric | Traditional Mesh | Cellular Mesh |
+|--------|------------------|---------------|
+| Connections/peer | O(N) | O(√N) |
+| Message latency | 1 hop | ~log(N) hops |
+| Max practical peers | ~100 | Massive scale |
+| Bandwidth/peer | High | Optimized |
+
+## Complete Example
+
+```javascript
+import { gdb } from 'genosdb';
+
+async function startP2PApp() {
+  // Initialize with RTC
+  const db = await gdb('my-collaborative-app', {
+    rtc: {
+      cells: { cellSize: 'auto' } // Enable cellular mesh
+    }
+  });
+
+  const room = db.room;
+  const selfId = db.selfId;
+
+  // Listen for peers
+  room.on('peer:join', (peerId) => {
+    console.log(`Peer ${peerId} joined`);
+    updatePeerList();
+  });
+
+  room.on('peer:leave', (peerId) => {
+    console.log(`Peer ${peerId} left`);
+    updatePeerList();
+  });
+
+  // Data sync happens automatically via GenosDB
+  // But you can also use custom channels
+  const chat = room.channel('chat');
+  
+  chat.on('message', (data, fromPeer) => {
+    displayMessage(fromPeer, data.text);
+  });
+
+  document.getElementById('sendBtn').onclick = () => {
+    const text = document.getElementById('input').value;
+    chat.send({ text, author: selfId });
+    displayMessage('You', text);
+  };
+
+  function updatePeerList() {
+    const peers = room.getPeers();
+    document.getElementById('peerCount').textContent = Object.keys(peers).length;
+  }
+
+  updatePeerList();
+}
+
+startP2PApp();
+```
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Nostr Signaling" icon="satellite-dish" href="/advanced/p2p/nostr-signaling">
+    Run your own Nostr relay
+  </Card>
+  <Card title="Cellular Mesh" icon="hexagon" href="/advanced/cellular-mesh">
+    Scalable mesh architecture
+  </Card>
+  <Card title="Fallback Server" icon="server" href="/advanced/p2p/fallback-server">
+    Optional reliability enhancement
+  </Card>
+</CardGroup>

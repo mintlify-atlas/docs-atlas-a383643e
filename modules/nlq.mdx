@@ -1,0 +1,356 @@
+---
+title: 'NLQ - Natural Language Queries'
+description: 'Query GenosDB using natural language prompts'
+---
+
+## Overview
+
+The NLQ (Natural Language Query) module adds a prompt-to-query translation layer to GenosDB. It converts simple natural-language prompts into standard operator-based queries.
+
+<Warning>
+**Important Limitations**:
+- NLQ only translates prompts to queries - it does NOT perform AI inference or content generation
+- Language: **Controlled English only** - other languages are not supported
+- Local processing - no external services or API calls
+</Warning>
+
+## Enabling the Module
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-db", { nlq: true })
+```
+
+## Basic Usage
+
+```javascript
+const { results } = await db.map({
+  prompt: "Finds only Companies"
+})
+
+console.log(results)
+```
+
+This translates to:
+
+```javascript
+const { results } = await db.map({
+  query: { type: "Company" }
+})
+```
+
+## Supported Patterns
+
+### Types and Selection
+
+```javascript
+// "only X" or "a/an X" (capitalized)
+prompt: "Finds only Companies"
+// → { query: { type: "Company" } }
+
+prompt: "Finds only Employees"
+// → { query: { type: "Employee" } }
+```
+
+### Field Filters
+
+```javascript
+// "with FIELD VALUE"
+prompt: "Find a Company with name Acme"
+// → { query: { type: "Company", name: "Acme" } }
+
+// "has/having FIELD"
+prompt: "Find users having email"
+// → { query: { type: "user", email: { $exists: true } } }
+```
+
+### Comparisons
+
+```javascript
+// Greater than
+prompt: "Find employees whose age > 30"
+// → { query: { type: "employee", age: { $gt: 30 } } }
+
+// Less than
+prompt: "Find products whose price < 100"
+// → { query: { type: "product", price: { $lt: 100 } } }
+
+// Between (numbers)
+prompt: "Find employees whose age between 30 and 40"
+// → { query: { type: "employee", age: { $between: [30, 40] } } }
+
+// Between (dates - ISO format)
+prompt: "Find employees whose hireDate between 2020-01-01 and 2020-12-31"
+// → { query: { type: "employee", hireDate: { $between: ["2020-01-01", "2020-12-31"] } } }
+```
+
+### Text Patterns
+
+```javascript
+// Contains
+prompt: "Find users whose name contains John"
+// → { query: { type: "user", name: { $regex: "John" } } }
+
+// Starts with
+prompt: "Find users whose name starts with A"
+// → { query: { type: "user", name: { $regex: "^A" } } }
+
+// Ends with
+prompt: "Find users whose name ends with son"
+// → { query: { type: "user", name: { $regex: "son$" } } }
+
+// Like pattern
+prompt: 'Find employees whose name like "J%"'
+// → { query: { type: "employee", name: { $like: "J%" } } }
+```
+
+### Lists and Membership
+
+```javascript
+// In list
+prompt: "Find employees whose country in USA, Canada, Mexico"
+// → { query: { type: "employee", country: { $in: ["USA", "Canada", "Mexico"] } } }
+
+// Includes (for arrays)
+prompt: "Find employees whose tags includes JavaScript"
+// → { query: { type: "employee", tags: { $in: ["JavaScript"] } } }
+
+// Simple OR
+prompt: "Find employees whose role is Developer or Designer"
+// → { query: { type: "employee", role: { $in: ["Developer", "Designer"] } } }
+```
+
+### Negation
+
+```javascript
+prompt: "Find employees whose country is not USA"
+// → { query: { type: "employee", country: { $not: { $eq: "USA" } } } }
+```
+
+### Full-Text Search
+
+```javascript
+prompt: "Full text search JavaScript"
+// → Searches across: name, role, level, country, title, body, tags
+
+prompt: 'Full text search "React Developer"'
+// → Same, but with quoted phrase
+```
+
+### Sorting
+
+```javascript
+prompt: "Get posts order desc by id limit 3"
+// → { field: "id", order: "desc", $limit: 3, query: {} }
+
+prompt: "Find employees order asc by name"
+// → { query: { type: "employee" }, field: "name", order: "asc" }
+```
+
+### Pagination
+
+```javascript
+prompt: "Get posts after node123 limit 10"
+// → { $after: "node123", $limit: 10, query: {} }
+
+prompt: 'Get posts before "node-xyz" limit 5'
+// → { $before: "node-xyz", $limit: 5, query: {} }
+```
+
+<Info>
+**Cursor Usage**: The ID you provide must exist in the ordered result set. Keep the same `order by` between queries for consistent pagination.
+</Info>
+
+### Graph Traversal
+
+```javascript
+// Descendant queries
+prompt: "Finds a Company, then finds descendant named Bob"
+// → { query: { type: "Company", $edge: { name: "Bob" } } }
+
+prompt: "Find a Company, then a descendant of type Employee with level Senior"
+// → { query: { type: "Company", $edge: { $and: [{ type: "Employee" }, { level: "Senior" }] } } }
+```
+
+## Examples
+
+### User Search
+
+```javascript
+const searchUsers = async (prompt) => {
+  const { results } = await db.map({ prompt })
+  return results
+}
+
+// Natural language queries
+await searchUsers("Find users whose age > 18")
+await searchUsers("Find users whose name starts with A")
+await searchUsers("Find users whose country in USA, Canada")
+```
+
+### Product Filtering
+
+```javascript
+class ProductSearch {
+  async search(prompt) {
+    const { results } = await db.map({ prompt })
+    return results
+  }
+}
+
+const search = new ProductSearch()
+
+// Price range
+await search.search("Find products whose price between 10 and 100")
+
+// Category
+await search.search("Find products whose category is Electronics")
+
+// Availability
+await search.search("Find products having inStock")
+```
+
+### Employee Queries
+
+```javascript
+// Age range
+const { results } = await db.map({
+  prompt: "Find employees whose age between 30 and 40 order asc by age"
+})
+
+// Hire date range
+const { results } = await db.map({
+  prompt: "Find employees whose hireDate between 2020-01-01 and 2020-12-31"
+})
+
+// Skills
+const { results } = await db.map({
+  prompt: "Find employees whose tags includes JavaScript"
+})
+```
+
+### Pagination Example
+
+```javascript
+// Step 1: Get first page with ordering
+const page1 = await db.map({
+  prompt: "Get employees order asc by name limit 10"
+})
+
+console.log("Page 1:", page1.results)
+
+const lastId = page1.results[page1.results.length - 1].id
+
+// Step 2: Get next page (maintain same ordering)
+const page2 = await db.map({
+  prompt: `Get employees after ${lastId} order asc by name limit 10`
+})
+
+console.log("Page 2:", page2.results)
+```
+
+### Complex Queries
+
+```javascript
+// Multiple conditions
+const { results } = await db.map({
+  prompt: "Find employees whose age > 25 and country is USA order desc by age"
+})
+
+// Text search with filters
+const { results } = await db.map({
+  prompt: "Find posts whose title contains JavaScript order desc by id limit 5"
+})
+```
+
+## Cheat Sheet
+
+| Pattern | Example | Translates To |
+|---------|---------|---------------|
+| Type selection | "only Companies" | `{ type: "Company" }` |
+| Equality | "with name Bob" | `{ name: "Bob" }` |
+| Existence | "has email" | `{ email: { $exists: true } }` |
+| Greater than | "age > 18" | `{ age: { $gt: 18 } }` |
+| Less than | "price < 100" | `{ price: { $lt: 100 } }` |
+| Between | "age between 20 and 30" | `{ age: { $between: [20, 30] } }` |
+| Contains | "name contains John" | `{ name: { $regex: "John" } }` |
+| Starts with | "name starts with A" | `{ name: { $regex: "^A" } }` |
+| Ends with | "name ends with son" | `{ name: { $regex: "son$" } }` |
+| In list | "country in USA, Canada" | `{ country: { $in: [...] } }` |
+| Not equals | "country is not USA" | `{ country: { $not: { $eq: "USA" } } }` |
+| Sort | "order asc by name" | `{ field: "name", order: "asc" }` |
+| Limit | "limit 10" | `{ $limit: 10 }` |
+| After | "after node123" | `{ $after: "node123" }` |
+| Descendant | "then descendant named X" | `{ $edge: { name: "X" } }` |
+
+## Best Practices
+
+<Tip>
+**Use Explicit Phrasing**: Be clear and specific:
+
+```javascript
+// ✅ Clear
+"Find employees whose age > 30"
+
+// ❌ Ambiguous  
+"employees over 30"
+```
+</Tip>
+
+<Tip>
+**Quote Multi-Word Values**:
+
+```javascript
+// ✅ Quoted
+'Find users whose name is "John Doe"'
+
+// ❌ Unquoted (may fail)
+"Find users whose name is John Doe"
+```
+</Tip>
+
+<Tip>
+**Use ISO Dates**:
+
+```javascript
+// ✅ ISO format
+"hireDate between 2020-01-01 and 2020-12-31"
+
+// ❌ Other formats not supported
+"hireDate between Jan 1 2020 and Dec 31 2020"
+```
+</Tip>
+
+<Warning>
+**Language Limitation**: NLQ recognizes only a fixed set of English patterns. Non-English words or unsupported phrasings will not work.
+</Warning>
+
+## When to Use NLQ
+
+### Good Use Cases
+
+✅ User-facing search interfaces  
+✅ Quick prototyping and exploration  
+✅ Simple filtering needs  
+✅ Learning GenosDB query syntax  
+
+### When to Use Direct Queries
+
+✅ Complex nested queries  
+✅ Performance-critical operations  
+✅ Programmatic query building  
+✅ Non-English applications  
+
+## Live Example
+
+[**NLQ Sandbox**](https://estebanrfp.github.io/gdb/examples/sandbox.html)
+
+Interactive demo with all supported prompts.
+
+## Related Features
+
+- [map() Method](/api/map) - Direct query API
+- [Comparison Operators](/api/operators/comparison) - Query operators
+- [Text Search](/api/operators/text-search) - Text operators
+- [Graph Traversal](/api/operators/graph-traversal) - $edge operator

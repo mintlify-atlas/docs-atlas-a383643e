@@ -1,0 +1,283 @@
+---
+title: 'get() - Retrieve Nodes'
+description: 'Fetch node data by ID with optional reactive subscriptions'
+---
+
+## Overview
+
+The `get()` method retrieves a node by its ID. When a callback is provided, it enables reactive mode, automatically invoking the callback on any changes to the node.
+
+## Signature
+
+```typescript
+await db.get(
+  id: string, 
+  callback?: (node: Node | null) => void
+): Promise<{ result: Node | null, unsubscribe?: () => void }>
+```
+
+## Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the node to retrieve.
+</ParamField>
+
+<ParamField path="callback" type="function">
+  Optional callback function for reactive updates. Receives the full node object or `null` if deleted.
+  
+  **Callback Parameters:**
+  - `node`: Node object with `{ id, value, edges, timestamp }` or `null`
+</ParamField>
+
+## Return Value
+
+<ResponseField name="result" type="Node | null">
+  The node object containing:
+  - `id` (string): The node's unique identifier
+  - `value` (object): The node's data content
+  - `edges` (array): Connected relationships
+  - `timestamp` (object): Hybrid Logical Clock timestamp with `{ physical, logical }`
+  
+  Returns `null` if the node doesn't exist.
+</ResponseField>
+
+<ResponseField name="unsubscribe" type="function">
+  Function to stop listening for updates (only present in reactive mode).
+</ResponseField>
+
+## Examples
+
+### Basic Retrieval
+
+```javascript
+const { result } = await db.get("user:ana")
+
+if (result) {
+  console.log("User name:", result.value.name)
+  console.log("Node ID:", result.id)
+} else {
+  console.log("User not found")
+}
+```
+
+### Accessing Node Properties
+
+```javascript
+const { result: user } = await db.get(userId)
+
+if (user) {
+  console.log("Value:", user.value)        // { type: "User", name: "Ana" }
+  console.log("Edges:", user.edges)          // ["fileId1", "fileId2"]
+  console.log("Timestamp:", user.timestamp)  // { physical: 1234567890, logical: 0 }
+}
+```
+
+### Reactive Mode - Listen for Changes
+
+```javascript
+const { result, unsubscribe } = await db.get("user:ana", (node) => {
+  if (node) {
+    console.log("User updated:", node.value)
+  } else {
+    console.log("User was deleted")
+  }
+})
+
+// Initial state
+console.log("Initial:", result.value)
+
+// Later, stop listening
+// unsubscribe()
+```
+
+### Building a Live UI Component
+
+```javascript
+class UserProfile {
+  constructor(userId) {
+    this.userId = userId
+    this.unsubscribe = null
+  }
+  
+  async mount() {
+    const { result, unsubscribe } = await db.get(
+      this.userId,
+      (user) => this.render(user)
+    )
+    
+    this.unsubscribe = unsubscribe
+    this.render(result)  // Initial render
+  }
+  
+  render(user) {
+    if (!user) {
+      document.getElementById("profile").innerHTML = "User not found"
+      return
+    }
+    
+    document.getElementById("profile").innerHTML = `
+      <h1>${user.value.name}</h1>
+      <p>${user.value.bio || "No bio"}</p>
+      <p>Status: ${user.value.status || "offline"}</p>
+    `
+  }
+  
+  unmount() {
+    if (this.unsubscribe) {
+      this.unsubscribe()
+    }
+  }
+}
+
+// Usage
+const profile = new UserProfile("user:ana")
+await profile.mount()
+
+// Clean up when component is removed
+// profile.unmount()
+```
+
+### Checking Node Existence
+
+```javascript
+const nodeExists = async (id) => {
+  const { result } = await db.get(id)
+  return result !== null
+}
+
+if (await nodeExists("task-123")) {
+  console.log("Task exists")
+}
+```
+
+### Following Graph Relationships
+
+```javascript
+// Get a folder and its files
+const { result: folder } = await db.get(folderId)
+
+if (folder) {
+  console.log("Folder:", folder.value.name)
+  
+  // Get all connected files
+  for (const fileId of folder.edges) {
+    const { result: file } = await db.get(fileId)
+    if (file) {
+      console.log("  - File:", file.value.name)
+    }
+  }
+}
+```
+
+### Real-Time Collaboration
+
+```javascript
+// Monitor a shared document
+const { unsubscribe } = await db.get(
+  "doc:shared-notes",
+  (doc) => {
+    if (!doc) return
+    
+    // Update editor content when remote peer makes changes
+    editor.setValue(doc.value.content)
+    updateCollaboratorList(doc.value.lastEditedBy)
+  }
+)
+
+// When user edits locally
+editor.on("change", async (content) => {
+  await db.put({
+    type: "Document",
+    content,
+    lastEditedBy: currentUser,
+    lastModified: Date.now()
+  }, "doc:shared-notes")
+})
+```
+
+### Handling Deleted Nodes
+
+```javascript
+const { unsubscribe } = await db.get(taskId, (task) => {
+  if (task === null) {
+    console.log("Task was deleted")
+    removeTaskFromUI(taskId)
+  } else {
+    console.log("Task state:", task.value)
+    updateTaskInUI(task)
+  }
+})
+```
+
+### Combining with Promises
+
+```javascript
+// Fetch multiple nodes in parallel
+const [user, settings, preferences] = await Promise.all([
+  db.get("user:ana"),
+  db.get("settings:ana"),
+  db.get("preferences:ana")
+])
+
+console.log("User:", user.result?.value)
+console.log("Settings:", settings.result?.value)
+console.log("Preferences:", preferences.result?.value)
+```
+
+## Reactive Subscriptions
+
+<Info>
+**Immediate Invocation**: When using a callback, it's invoked immediately with the current node state, then again on any subsequent changes.
+</Info>
+
+<Warning>
+**Memory Leaks**: Always call `unsubscribe()` when you no longer need updates to prevent memory leaks, especially in single-page applications:
+
+```javascript
+// In a component lifecycle
+const { unsubscribe } = await db.get(id, callback)
+
+// On component unmount/destroy
+onCleanup(() => {
+  unsubscribe()
+})
+```
+</Warning>
+
+## Node Structure
+
+Every node returned by `get()` has this structure:
+
+```typescript
+interface Node {
+  id: string              // Unique identifier
+  value: object           // Your data
+  edges: string[]         // Array of linked node IDs
+  timestamp: {
+    physical: number      // Unix timestamp in milliseconds
+    logical: number       // Logical clock counter
+  }
+}
+```
+
+## Performance Notes
+
+- **O(1) Lookup**: Node retrieval by ID is constant time
+- **No Network Delay**: Reads are always from local storage
+- **Reactive Efficiency**: Subscriptions use internal event emitters with minimal overhead
+
+## Comparison with map()
+
+| Feature | get() | map() |
+|---------|-------|-------|
+| Lookup | By ID only | By query filters |
+| Returns | Single node | Array of nodes |
+| Reactive | Optional | Optional |
+| Use case | Known ID | Search/filter |
+
+## Related Methods
+
+- [put()](/api/put) - Create or update nodes
+- [map()](/api/map) - Query multiple nodes
+- [link()](/api/link) - Create relationships
+- [remove()](/api/remove) - Delete nodes

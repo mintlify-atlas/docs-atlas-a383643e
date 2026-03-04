@@ -1,0 +1,378 @@
+---
+title: 'map() - Query Nodes'
+description: 'Query nodes with filters, sorting, pagination, and real-time updates'
+---
+
+## Overview
+
+The `map()` method queries nodes using MongoDB-style filters with support for sorting, pagination, and real-time subscriptions. It's the primary method for searching and monitoring data.
+
+## Signature
+
+```typescript
+await db.map(
+  ...args: [
+    options?: QueryOptions,
+    callback?: (event: NodeEvent) => void
+  ]
+): Promise<{ results: Node[], unsubscribe?: () => void }>
+```
+
+The order of arguments doesn't matter - you can pass the callback first or the options first.
+
+## Parameters
+
+<ParamField path="options" type="object">
+  Query configuration object.
+  
+  <Expandable title="options properties">
+    <ParamField path="query" type="object" default="{}">
+      MongoDB-style filter. Defaults to `{}` (all nodes). Supports advanced operators including `$edge` for graph traversal.
+    </ParamField>
+    
+    <ParamField path="field" type="string">
+      Field name to sort by.
+    </ParamField>
+    
+    <ParamField path="order" type="'asc' | 'desc'" default="'asc'">
+      Sort direction: `'asc'` for ascending, `'desc'` for descending.
+    </ParamField>
+    
+    <ParamField path="$limit" type="number">
+      Maximum number of results to return.
+    </ParamField>
+    
+    <ParamField path="$after" type="string">
+      Paginate after a specific node ID.
+    </ParamField>
+    
+    <ParamField path="$before" type="string">
+      Paginate before a specific node ID.
+    </ParamField>
+    
+    <ParamField path="realtime" type="boolean" default="false">
+      Explicitly enable/disable real-time mode. If a callback is provided and `realtime` is not explicitly `false`, real-time mode is automatically enabled.
+    </ParamField>
+    
+    <ParamField path="prompt" type="string">
+      Natural language query (requires `nlq: true` module).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="callback" type="function">
+  Optional callback for real-time updates.
+  
+  **Callback receives an event object with:**
+  - `id` (string): Node ID
+  - `value` (object): Node content (`null` for 'removed' action)
+  - `edges` (array): Connected relationships
+  - `timestamp` (object): HLC timestamp
+  - `action` (string): Event type - `'initial'`, `'added'`, `'updated'`, `'removed'`
+</ParamField>
+
+## Return Value
+
+<ResponseField name="results" type="Node[]">
+  Array of nodes matching the query. Each node contains `{ id, value, edges, timestamp }`.
+</ResponseField>
+
+<ResponseField name="unsubscribe" type="function">
+  Function to stop listening for updates (only present when callback is provided).
+</ResponseField>
+
+## Examples
+
+### Basic Query - All Nodes
+
+```javascript
+const { results } = await db.map()
+
+console.log("All nodes:", results)
+```
+
+### Filter by Type
+
+```javascript
+const { results } = await db.map({
+  query: { type: "user" }
+})
+
+console.log("All users:", results)
+```
+
+### Sorting
+
+```javascript
+const { results } = await db.map({
+  query: { type: "user" },
+  field: "name",
+  order: "asc"
+})
+
+console.log("Users sorted by name:", results)
+```
+
+### Limit Results
+
+```javascript
+const { results } = await db.map({
+  query: { type: "post" },
+  field: "createdAt",
+  order: "desc",
+  $limit: 10
+})
+
+console.log("Latest 10 posts:", results)
+```
+
+### Real-Time Updates
+
+```javascript
+// Listen to all nodes in real-time
+const { unsubscribe } = await db.map(({ id, value, action }) => {
+  if (action === "initial") {
+    console.log(`[INITIAL DATA] ID: ${id}`, value)
+  }
+  if (action === "added") {
+    console.log(`[NODE ADDED] ID: ${id}`, value)
+  }
+  if (action === "updated") {
+    console.log(`[NODE UPDATED] ID: ${id}`, value)
+  }
+  if (action === "removed") {
+    console.log(`[NODE REMOVED] ID: ${id}`)
+  }
+})
+
+// Stop listening
+// unsubscribe()
+```
+
+### Real-Time with Filters
+
+```javascript
+const { unsubscribe } = await db.map(
+  { query: { type: "task", status: "pending" } },
+  ({ id, value, action }) => {
+    console.log(`Task ${id} ${action}:`, value)
+  }
+)
+```
+
+### Live Task List
+
+```javascript
+class TaskList {
+  constructor() {
+    this.tasks = new Map()
+    this.unsubscribe = null
+  }
+  
+  async init() {
+    const { unsubscribe } = await db.map(
+      { query: { type: "task" } },
+      ({ id, value, action }) => {
+        if (action === "initial" || action === "added" || action === "updated") {
+          this.tasks.set(id, value)
+        } else if (action === "removed") {
+          this.tasks.delete(id)
+        }
+        this.render()
+      }
+    )
+    
+    this.unsubscribe = unsubscribe
+  }
+  
+  render() {
+    const html = Array.from(this.tasks.values())
+      .map(task => `<li>${task.text}</li>`)
+      .join("")
+    
+    document.getElementById("tasks").innerHTML = html
+  }
+  
+  destroy() {
+    if (this.unsubscribe) this.unsubscribe()
+  }
+}
+```
+
+### Pagination - After
+
+```javascript
+// Get first page
+const page1 = await db.map({
+  query: { type: "post" },
+  field: "createdAt",
+  order: "desc",
+  $limit: 10
+})
+
+console.log("Page 1:", page1.results)
+
+// Get next page
+const lastId = page1.results[page1.results.length - 1].id
+
+const page2 = await db.map({
+  query: { type: "post" },
+  field: "createdAt",
+  order: "desc",
+  $limit: 10,
+  $after: lastId
+})
+
+console.log("Page 2:", page2.results)
+```
+
+### Pagination - Before
+
+```javascript
+const { results } = await db.map({
+  query: { type: "post" },
+  $limit: 10,
+  $before: "post-123"
+})
+
+console.log("Previous page:", results)
+```
+
+### Complex Filters with Operators
+
+```javascript
+// Users with age > 18
+const { results } = await db.map({
+  query: {
+    type: "user",
+    age: { $gt: 18 }
+  }
+})
+
+// Posts with specific tags
+const { results } = await db.map({
+  query: {
+    type: "post",
+    tags: { $in: ["javascript", "react"] }
+  }
+})
+
+// Items within price range
+const { results } = await db.map({
+  query: {
+    type: "product",
+    price: { $between: [10, 100] }
+  }
+})
+```
+
+### Graph Traversal with $edge
+
+```javascript
+// Find all Files inside a Documents folder
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Documents",
+    $edge: {
+      type: "File"
+    }
+  }
+})
+
+console.log("Files in Documents:", results)
+```
+
+### Nested Graph Traversal
+
+```javascript
+// Find all Files > 1MB in Documents folder
+const { results } = await db.map({
+  query: {
+    type: "Folder",
+    name: "Documents",
+    $edge: {
+      type: "File",
+      $or: [
+        { extension: "jpg" },
+        { size: { $gt: 1024 } }
+      ]
+    }
+  }
+})
+```
+
+### Multiple Independent Queries
+
+```javascript
+// Run in parallel
+const [users, posts, tasks] = await Promise.all([
+  db.map({ query: { type: "user" } }),
+  db.map({ query: { type: "post" } }),
+  db.map({ query: { type: "task" } })
+])
+
+console.log("Users:", users.results.length)
+console.log("Posts:", posts.results.length)
+console.log("Tasks:", tasks.results.length)
+```
+
+## Real-Time Event Actions
+
+<ParamField path="initial">
+  Fired for each node that matches the query when the subscription is first created. Provides the initial dataset.
+</ParamField>
+
+<ParamField path="added">
+  Fired when a new node is created that matches the query.
+</ParamField>
+
+<ParamField path="updated">
+  Fired when an existing node matching the query is modified.
+</ParamField>
+
+<ParamField path="removed">
+  Fired when a node matching the query is deleted. The `value` will be `null`.
+</ParamField>
+
+## Best Practices
+
+<Tip>
+**Use Destructuring**: Extract only the properties you need from the event object:
+
+```javascript
+// ✅ Recommended
+await db.map(({ id, value, action }) => {
+  console.log(id, action)
+})
+
+// ❌ Avoid
+await db.map((event) => {
+  console.log(event.id, event.action)
+})
+```
+</Tip>
+
+<Warning>
+**Always Unsubscribe**: Prevent memory leaks by calling `unsubscribe()` when done:
+
+```javascript
+const { unsubscribe } = await db.map(callback)
+
+// Later, when component unmounts
+unsubscribe()
+```
+</Warning>
+
+<Info>
+**Initial Data**: The callback receives `action: 'initial'` events for existing data, making separate handling of the `results` array often unnecessary for real-time UI updates.
+</Info>
+
+## Related Methods
+
+- [get()](/api/get) - Retrieve single node
+- [put()](/api/put) - Insert or update
+- [Comparison Operators](/api/operators/comparison) - $gt, $lt, $eq, etc.
+- [Text Search](/api/operators/text-search) - $text operator
+- [Graph Traversal](/api/operators/graph-traversal) - $edge operator
+- [Logical Operators](/api/operators/logical) - $and, $or, $not

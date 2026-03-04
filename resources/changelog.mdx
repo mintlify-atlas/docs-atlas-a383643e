@@ -1,0 +1,181 @@
+---
+title: "Changelog"
+description: "Release history and version updates for GenosDB"
+---
+
+All notable changes to GenosDB are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
+
+<Note>
+For the complete, detailed changelog, see the [CHANGELOG.md on GitHub](https://github.com/estebanrfp/gdb/blob/main/CHANGELOG.md).
+</Note>
+
+## Recent Releases
+
+### [0.12.7] - 2026-02-18
+
+**Changed:**
+- **Testing Infrastructure**: Replaced Vitest/jsdom with real browser testing via `agent-browser` for actual P2P sync verification
+
+### [0.12.0] - 2025-12-01
+
+<Card title="Major Feature: Cellular Mesh" icon="hexagon">
+  Revolutionary P2P topology enabling GenosDB to scale to tens of thousands of simultaneous peers
+</Card>
+
+**Added:**
+- **Cellular Overlay System**: Organizes peers into logical cells with bridge nodes
+- **Dynamic Cell Sizing**: Automatic adjustment based on network size
+- **Configurable Options**: `rtc: { cells: { ... } }`
+- **Universal Network Monitor**: D3.js visualization tool for topology monitoring
+
+**Performance:**
+- Reduced connection complexity from O(N²) to O(N)
+- Bandwidth optimization up to 80% in large networks
+
+[View full 0.12.0 release notes →](https://github.com/estebanrfp/gdb/blob/main/CHANGELOG.md#0120---2025-12-01)
+
+### [0.11.8] - 2025-10-12
+
+**Improved:**
+- **High-Performance OPFS Worker**: Uses Transferable Objects for zero-copy data transfer
+- **Intelligent Lock Management**: Parallel reads, serialized writes
+
+**Fixed:**
+- **Cross-Tab Data Integrity**: Web Locks API prevents race conditions
+
+### [0.11.0] - 2025-09-11
+
+**Added:**
+- Container signing for `deltaSync` and `fullStateSync` when SM is active
+- Clear sync logs for debugging
+
+**Changed:**
+- Sync protocol frozen (SM-agnostic)
+- Both delta and full-state sync use compression
+
+**Fixed:**
+- A-B-C propagation with preserved-signature relaying
+
+### [0.10.2] - 2025-09-03
+
+**Fixed:**
+- **Critical**: Role propagation issue where roles could be lost during P2P sync
+
+**Improved:**
+- Conflict resolution for role assignments
+
+### [0.10.0] - 2025-09-02
+
+**Added:**
+- **Access Control Lists (ACLs)**: Node-level permissions module
+- Automatic enforcement via middleware
+- Compatible with existing RBAC
+
+**Improved:**
+- Security Manager extensibility
+
+### [0.9.8] - 2025-08-30
+
+**Improved:**
+- **Instantaneous P2P Startup**: Non-blocking hybrid relay management
+- **Proactive Network Resilience**: Smart fallback relay connections
+- **Efficient Relay Management**: Auto-disconnect from non-performant relays
+
+**Fixed:**
+- Security Manager decryption bug in `get` function
+
+## Key Milestones
+
+<AccordionGroup>
+  <Accordion title="v0.9.0 - Explicit RTC Activation (2025-08-21)">
+    **Breaking Change**: P2P/RTC networking now requires `rtc: true` flag
+    
+    ```javascript
+    // Before (automatic)
+    const db = await gdb('mydb');
+    
+    // After (explicit)
+    const db = await gdb('mydb', { rtc: true });
+    ```
+    
+    **Benefits**: Reduced bundle size, prevents unwanted network connections
+  </Accordion>
+  
+  <Accordion title="v0.8.0 - Unprecedented Write Performance (2025-08-19)">
+    - Configurable persistence delay (`saveDelay` option)
+    - Configurable oplog size (`oplogSize` option)
+    - Handles tens of thousands of operations per second
+  </Accordion>
+  
+  <Accordion title="v0.7.0 - Async Factory Function (2025-08-18)">
+    **Breaking Change**: Migrated from class to async factory
+    
+    ```javascript
+    // Before
+    const db = new GDB('mydb');
+    
+    // After
+    const db = await gdb('mydb');
+    ```
+    
+    [Migration Guide](/resources/migration-guide)
+  </Accordion>
+  
+  <Accordion title="v0.6.0 - Channel-Based Communication (2025-08-11)">
+    New event-driven real-time communication layer with:
+    - Standardized event API
+    - Built-in transfer progress monitoring
+    - Network-level robustness (timeouts, retries)
+  </Accordion>
+  
+  <Accordion title="v0.5.0 - Recursive Graph Traversal (2025-08-10)">
+    Introduced powerful `$edge` operator for multi-hop graph queries
+  </Accordion>
+  
+  <Accordion title="v0.4.0 - Delta Synchronization Engine (2025-08-06)">
+    Complete P2P sync overhaul:
+    - Sliding-window Operation Log (Oplog)
+    - Compressed delta payloads
+    - Full-state sync fallback
+    - 90%+ bandwidth reduction
+  </Accordion>
+</AccordionGroup>
+
+## Version History
+
+| Version | Date | Key Feature |
+|---------|------|-------------|
+| 0.12.7 | 2026-02-18 | Real browser testing |
+| 0.12.0 | 2025-12-01 | Cellular Mesh architecture |
+| 0.11.8 | 2025-10-12 | OPFS Worker optimization |
+| 0.11.0 | 2025-09-11 | Container signing |
+| 0.10.2 | 2025-09-03 | Role propagation fix |
+| 0.10.0 | 2025-09-02 | ACLs module |
+| 0.9.8 | 2025-08-30 | Instant P2P startup |
+| 0.9.0 | 2025-08-21 | Explicit RTC activation |
+| 0.8.0 | 2025-08-19 | Extreme write performance |
+| 0.7.0 | 2025-08-18 | Async factory function |
+| 0.6.0 | 2025-08-11 | Channel-based communication |
+| 0.5.0 | 2025-08-10 | Recursive graph traversal |
+| 0.4.0 | 2025-08-06 | Delta synchronization |
+
+<Info>
+For the complete changelog with all minor versions and detailed changes, visit the [GitHub repository](https://github.com/estebanrfp/gdb/blob/main/CHANGELOG.md).
+</Info>
+
+## Upgrade Guides
+
+- **v0.9.x → v0.10.x**: [No breaking changes]
+- **v0.8.x → v0.9.x**: [Enable RTC explicitly](/resources/migration-guide)
+- **v0.6.x → v0.7.x**: [Async factory migration](/resources/migration-guide)
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Migration Guide" icon="arrows-turn-right" href="/resources/migration-guide">
+    Migrate from old API to new
+  </Card>
+  <Card title="Roadmap" icon="map" href="/resources/roadmap">
+    Upcoming features and goals
+  </Card>
+</CardGroup>

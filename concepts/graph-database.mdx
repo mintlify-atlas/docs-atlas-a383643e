@@ -1,0 +1,350 @@
+---
+title: Graph Databases
+description: Understanding graph databases, nodes, edges, and relationships in GenosDB
+---
+
+# Graph Databases
+
+GenosDB is a **graph database**, which means it stores data as nodes (entities) and edges (relationships) rather than tables and rows. This structure is ideal for modeling real-world relationships and enables powerful traversal queries.
+
+## What is a Graph Database?
+
+A graph database represents data as a network of interconnected nodes. Each node can be linked to other nodes through directed relationships called edges.
+
+```plaintext
+     Alice
+       │
+    knows
+       │
+       v
+      Bob --------follows--------> Carol
+       │
+     likes
+       │
+       v
+   Project X
+```
+
+### Core Components
+
+<CardGroup cols={2}>
+  <Card title="Nodes" icon="circle">
+    Entities that store data (users, posts, products, etc.)
+  </Card>
+  
+  <Card title="Edges" icon="arrow-right">
+    Directed relationships between nodes
+  </Card>
+  
+  <Card title="Properties" icon="tags">
+    Key-value data stored within nodes
+  </Card>
+  
+  <Card title="Traversals" icon="route">
+    Queries that follow edges to discover connections
+  </Card>
+</CardGroup>
+
+## Nodes in GenosDB
+
+A **node** is the fundamental unit of data. Each node has:
+
+- **ID**: A unique identifier (auto-generated hash or custom)
+- **Value**: The data stored in the node (any serializable object)
+- **Edges**: An array of IDs representing connections to other nodes
+- **Timestamp**: A Hybrid Logical Clock timestamp for conflict resolution
+
+### Creating Nodes
+
+```javascript
+import { gdb } from 'genosdb';
+
+const db = await gdb('my-graph');
+
+// Create a user node
+const aliceId = await db.put({
+  type: 'User',
+  name: 'Alice',
+  email: 'alice@example.com'
+});
+
+// Create with custom ID
+const bobId = await db.put(
+  { type: 'User', name: 'Bob' },
+  'user-bob'
+);
+
+console.log('Alice ID:', aliceId);
+console.log('Bob ID:', bobId);
+```
+
+### Node Structure
+
+When you retrieve a node with `db.get()`, you get the full node object:
+
+```javascript
+const { result } = await db.get(aliceId);
+
+console.log(result);
+// {
+//   id: 'abc123...',
+//   value: { type: 'User', name: 'Alice', email: 'alice@example.com' },
+//   edges: ['def456...', 'ghi789...'],
+//   timestamp: { physical: 1234567890, logical: 0 }
+// }
+```
+
+<Info>
+The `value` property contains your application data. The `edges`, `timestamp`, and `id` are managed by GenosDB.
+</Info>
+
+## Edges (Relationships)
+
+An **edge** is a directed connection from one node to another. Edges are stored as arrays within the source node.
+
+### Creating Edges
+
+```javascript
+// Alice knows Bob
+await db.link(aliceId, bobId);
+
+// Bob follows Carol
+const carolId = await db.put({ type: 'User', name: 'Carol' });
+await db.link(bobId, carolId);
+
+// Alice likes a project
+const projectId = await db.put({ type: 'Project', name: 'GenosDB' });
+await db.link(aliceId, projectId);
+```
+
+### Edge Directionality
+
+Edges are **directed**, meaning they go from source to target:
+
+```javascript
+await db.link(aliceId, bobId); // Alice -> Bob
+// This does NOT create Bob -> Alice
+```
+
+To create a bidirectional relationship, create two edges:
+
+```javascript
+await db.link(aliceId, bobId); // Alice -> Bob
+await db.link(bobId, aliceId); // Bob -> Alice
+```
+
+## Graph vs Relational Databases
+
+### Relational Database Approach
+
+In a traditional SQL database, you'd need multiple tables and JOINs:
+
+```sql
+-- Users table
+CREATE TABLE users (id, name, email);
+
+-- Relationships table
+CREATE TABLE relationships (user_id, friend_id, type);
+
+-- Query: Find Alice's friends
+SELECT u.* FROM users u
+JOIN relationships r ON u.id = r.friend_id
+WHERE r.user_id = 'alice' AND r.type = 'friend';
+```
+
+### Graph Database Approach
+
+With GenosDB, relationships are first-class citizens:
+
+```javascript
+// Create users
+const aliceId = await db.put({ name: 'Alice' });
+const bobId = await db.put({ name: 'Bob' });
+
+// Create relationship
+await db.link(aliceId, bobId);
+
+// Query: Find Alice's friends (using $edge traversal)
+const { results } = await db.map({
+  query: {
+    name: 'Alice',
+    $edge: { type: 'User' }
+  }
+});
+```
+
+<Tip>
+Graph databases excel when relationships are as important as the data itself: social networks, recommendation engines, knowledge graphs, etc.
+</Tip>
+
+## Graph Traversal
+
+The real power of graph databases comes from **traversal** - following edges to discover connections.
+
+### Simple Traversal
+
+Find all nodes connected to Alice:
+
+```javascript
+const { results } = await db.map({
+  query: {
+    name: 'Alice',
+    $edge: {} // All connected nodes
+  }
+});
+```
+
+### Filtered Traversal
+
+Find only User nodes connected to Alice:
+
+```javascript
+const { results } = await db.map({
+  query: {
+    name: 'Alice',
+    $edge: { type: 'User' } // Only users
+  }
+});
+```
+
+### Multi-Hop Traversal
+
+The `$edge` operator is **recursive**, so it follows edges to any depth:
+
+```plaintext
+Alice -> Bob -> Carol -> David
+```
+
+```javascript
+// Find all users transitively connected to Alice
+const { results } = await db.map({
+  query: {
+    name: 'Alice',
+    $edge: { type: 'User' }
+  }
+});
+// Returns: [Bob, Carol, David]
+```
+
+<Warning>
+Recursive traversals can be expensive on large graphs. Use filters to limit the search space.
+</Warning>
+
+## Use Cases for Graph Databases
+
+Graph databases shine in scenarios involving complex relationships:
+
+### Social Networks
+
+```javascript
+// Model: User -> follows -> User
+const alice = await db.put({ type: 'User', name: 'Alice' });
+const bob = await db.put({ type: 'User', name: 'Bob' });
+await db.link(alice, bob); // Alice follows Bob
+
+// Find all of Alice's followers' followers
+const { results } = await db.map({
+  query: {
+    id: alice,
+    $edge: { $edge: { type: 'User' } } // 2 hops
+  }
+});
+```
+
+### Knowledge Graphs
+
+```javascript
+// Model: Concept -> relates_to -> Concept
+const dbConcept = await db.put({ type: 'Concept', name: 'Database' });
+const graphConcept = await db.put({ type: 'Concept', name: 'Graph' });
+await db.link(dbConcept, graphConcept);
+
+// Find all related concepts
+const { results } = await db.map({
+  query: {
+    name: 'Database',
+    $edge: { type: 'Concept' }
+  }
+});
+```
+
+### Recommendation Engines
+
+```javascript
+// Model: User -> likes -> Product <- liked_by <- User
+const user1 = await db.put({ type: 'User', name: 'Alice' });
+const product = await db.put({ type: 'Product', name: 'Laptop' });
+const user2 = await db.put({ type: 'User', name: 'Bob' });
+
+await db.link(user1, product); // Alice likes Laptop
+await db.link(user2, product); // Bob likes Laptop
+
+// Find users with similar tastes (who like the same products)
+const { results } = await db.map({
+  query: {
+    name: 'Alice',
+    $edge: { type: 'Product', $edge: { type: 'User' } }
+  }
+});
+// Returns: [Bob]
+```
+
+## Performance Considerations
+
+### Indexing
+
+GenosDB maintains indexes for efficient queries:
+
+```javascript
+// Enable Radix Tree indexing for prefix searches
+const db = await gdb('my-db', { rx: true });
+
+// Enable Inverted Index for full-text search
+const db = await gdb('my-db', { ii: true });
+```
+
+### Query Optimization
+
+1. **Use specific filters**: `{ type: 'User', name: 'Alice' }` is faster than `{ name: 'Alice' }`
+2. **Limit traversal depth**: Use specific sub-queries in `$edge`
+3. **Paginate results**: Use `$limit`, `$after`, and `$before`
+
+## Graph Data Modeling Tips
+
+<Steps>
+  <Step title="Identify Entities">
+    Determine what needs to be a node (users, products, posts, etc.)
+  </Step>
+  
+  <Step title="Define Relationships">
+    Identify how entities connect (follows, likes, owns, etc.)
+  </Step>
+  
+  <Step title="Add Properties">
+    Store relevant data in node values
+  </Step>
+  
+  <Step title="Plan Traversals">
+    Think about the queries you'll need and model accordingly
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Graph Traversal Guide" icon="route" href="/guides/graph-traversal">
+    Master the $edge operator for recursive queries
+  </Card>
+  
+  <Card title="CRUD Operations" icon="database" href="/guides/crud-operations">
+    Learn all database operations in depth
+  </Card>
+  
+  <Card title="P2P Sync" icon="arrows-rotate" href="/concepts/p2p-sync">
+    Understand how graph data syncs across peers
+  </Card>
+  
+  <Card title="Examples" icon="code" href="/examples/overview">
+    See graph databases in action
+  </Card>
+</CardGroup>

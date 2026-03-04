@@ -1,0 +1,270 @@
+---
+title: Installation
+description: Install GenosDB via npm, yarn, pnpm, or use it directly from a CDN
+---
+
+# Installation
+
+GenosDB can be installed via package managers or used directly in the browser from a CDN. Choose the method that works best for your project.
+
+## Package Manager Installation
+
+<CodeGroup>
+
+```bash npm
+npm install genosdb
+```
+
+```bash yarn
+yarn add genosdb
+```
+
+```bash pnpm
+pnpm add genosdb
+```
+
+</CodeGroup>
+
+### Import in Your Project
+
+After installation, import GenosDB using ES6 modules:
+
+```javascript
+import { gdb } from 'genosdb';
+
+// Initialize a database
+const db = await gdb('my-app');
+```
+
+<Note>
+GenosDB uses an async factory function. You can use top-level `await` in modern ES modules or wrap the initialization in an async function.
+</Note>
+
+## CDN Usage
+
+You can use GenosDB directly in the browser without any build tools:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GenosDB Example</title>
+</head>
+<body>
+  <h1>GenosDB CDN Example</h1>
+  
+  <script type="module">
+    import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
+    
+    // Initialize database
+    const db = await gdb('my-app', { rtc: true });
+    
+    // Store data
+    const id = await db.put({ message: 'Hello from CDN!' });
+    console.log('Stored with ID:', id);
+  </script>
+</body>
+</html>
+```
+
+### CDN Options
+
+GenosDB is available on multiple CDNs:
+
+<Tabs>
+  <Tab title="jsDelivr">
+    ```html
+    <script type="module">
+      import { gdb } from 'https://cdn.jsdelivr.net/npm/genosdb@latest/dist/index.min.js';
+    </script>
+    ```
+  </Tab>
+  
+  <Tab title="unpkg">
+    ```html
+    <script type="module">
+      import { gdb } from 'https://unpkg.com/genosdb@latest/dist/index.min.js';
+    </script>
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+Always use `<script type="module">` when importing from CDN to enable ES6 module syntax.
+</Warning>
+
+## Browser Compatibility
+
+GenosDB works in all modern browsers that support:
+
+- **ES2020+** (async/await, optional chaining, etc.)
+- **OPFS** (Origin Private File System) for persistent storage
+- **WebRTC** for P2P communication (when using `rtc: true`)
+- **IndexedDB** as a fallback for browsers without OPFS support
+
+### Supported Browsers
+
+<CardGroup cols={2}>
+  <Card title="Chrome / Edge" icon="chrome">
+    Version 86+ (full support with OPFS)
+  </Card>
+  
+  <Card title="Firefox" icon="firefox">
+    Version 111+ (OPFS support added)
+  </Card>
+  
+  <Card title="Safari" icon="safari">
+    Version 15.2+ (partial OPFS support)
+  </Card>
+  
+  <Card title="Mobile Browsers" icon="mobile">
+    iOS Safari 15.2+, Chrome Mobile 86+
+  </Card>
+</CardGroup>
+
+<Info>
+For browsers without OPFS support, GenosDB automatically falls back to IndexedDB for storage.
+</Info>
+
+## WebAuthn Requirements
+
+If you're using the Security Manager module with WebAuthn authentication:
+
+- **HTTPS required** in production
+- **localhost** or **127.0.0.1** works for development
+- Hardware security keys or biometric authentication must be available
+
+## Bundler Configuration
+
+GenosDB works out-of-the-box with most bundlers, but here are some tips:
+
+### Vite
+
+No special configuration needed:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // GenosDB works automatically
+});
+```
+
+### Webpack
+
+For Webpack 5, ensure you're targeting modern browsers:
+
+```javascript webpack.config.js
+module.exports = {
+  target: 'web',
+  output: {
+    module: true,
+  },
+  experiments: {
+    outputModule: true,
+  },
+};
+```
+
+### Next.js
+
+For Next.js, mark GenosDB as a client-side only module:
+
+```javascript next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.resolve.fallback = {
+      fs: false,
+      net: false,
+      tls: false,
+    };
+    return config;
+  },
+};
+```
+
+Then use dynamic imports:
+
+```javascript
+import dynamic from 'next/dynamic';
+
+const MyComponent = dynamic(
+  () => import('../components/GenosDBComponent'),
+  { ssr: false }
+);
+```
+
+## TypeScript Support
+
+GenosDB includes TypeScript type definitions. No additional setup needed:
+
+```typescript
+import { gdb } from 'genosdb';
+
+interface User {
+  name: string;
+  age: number;
+}
+
+const db = await gdb('my-app');
+const userId = await db.put<User>({ name: 'Alice', age: 30 });
+```
+
+<Tip>
+While GenosDB provides type definitions, the library itself is distributed as optimized, minified JavaScript for performance.
+</Tip>
+
+## Verify Installation
+
+Test your installation with this simple example:
+
+```javascript
+import { gdb } from 'genosdb';
+
+// Initialize database
+const db = await gdb('test-db');
+
+// Store a value
+const id = await db.put({ message: 'Installation successful!' });
+
+// Retrieve it
+const { result } = await db.get(id);
+console.log(result.value); // { message: 'Installation successful!' }
+```
+
+If you see the message logged, you're ready to go!
+
+## Next Steps
+
+<Steps>
+  <Step title="Complete the Quickstart">
+    Build your first real-time app with our [Quickstart Tutorial](/quickstart)
+  </Step>
+  
+  <Step title="Learn Core Concepts">
+    Understand how GenosDB works in the [Concepts](/concepts/graph-database) section
+  </Step>
+  
+  <Step title="Explore Examples">
+    See working code in our [Examples](/examples/overview) gallery
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Module not found
+
+If you get a "module not found" error, ensure you're using a modern bundler that supports ES modules.
+
+### OPFS not available
+
+If you see warnings about OPFS, your browser may not support it. GenosDB will automatically fall back to IndexedDB.
+
+### WebRTC connection issues
+
+If P2P connections fail, you may need to configure TURN servers for NAT traversal. See the [P2P Setup Guide](/guides/p2p-setup).
+
+### Need Help?
+
+Check out our [GitHub Discussions](https://github.com/estebanrfp/gdb/discussions) or [open an issue](https://github.com/estebanrfp/gdb/issues).

@@ -1,0 +1,430 @@
+---
+title: 'Comparison Operators'
+description: 'Filter nodes using equality, range, and existence checks'
+---
+
+## Overview
+
+Comparison operators enable precise filtering of nodes based on field values. These operators work with `db.map()` queries and support numbers, strings, dates, and arrays.
+
+## Operators
+
+### $eq - Equals
+
+Matches nodes where the field equals the specified value.
+
+```javascript
+// Explicit equality
+const { results } = await db.map({
+  query: {
+    type: { $eq: "User" }
+  }
+})
+
+// Shorthand (implicit $eq)
+const { results } = await db.map({
+  query: {
+    type: "User"
+  }
+})
+```
+
+### $ne - Not Equals
+
+Matches nodes where the field does not equal the specified value.
+
+```javascript
+const { results } = await db.map({
+  query: {
+    status: { $ne: "deleted" }
+  }
+})
+```
+
+### $gt - Greater Than
+
+Matches nodes where the field is greater than the specified value.
+
+```javascript
+// Users older than 18
+const { results } = await db.map({
+  query: {
+    type: "User",
+    age: { $gt: 18 }
+  }
+})
+
+// Prices above $100
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    price: { $gt: 100 }
+  }
+})
+```
+
+### $gte - Greater Than or Equal
+
+Matches nodes where the field is greater than or equal to the specified value.
+
+```javascript
+// Premium users (level 5 or higher)
+const { results } = await db.map({
+  query: {
+    type: "User",
+    level: { $gte: 5 }
+  }
+})
+```
+
+### $lt - Less Than
+
+Matches nodes where the field is less than the specified value.
+
+```javascript
+// Small files only
+const { results } = await db.map({
+  query: {
+    type: "File",
+    size: { $lt: 1024 }  // Less than 1KB
+  }
+})
+```
+
+### $lte - Less Than or Equal
+
+Matches nodes where the field is less than or equal to the specified value.
+
+```javascript
+// Budget items
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    price: { $lte: 50 }
+  }
+})
+```
+
+### $in - In Array
+
+Matches nodes where the field value is in the specified array.
+
+```javascript
+// Users with specific roles
+const { results } = await db.map({
+  query: {
+    type: "User",
+    role: { $in: ["admin", "moderator", "editor"] }
+  }
+})
+
+// Products with specific tags
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    tags: { $in: ["electronics", "computers"] }
+  }
+})
+```
+
+### $between - Range
+
+Matches nodes where the field value falls between two values (inclusive).
+
+```javascript
+// Ages between 18 and 65
+const { results } = await db.map({
+  query: {
+    type: "User",
+    age: { $between: [18, 65] }
+  }
+})
+
+// Prices in range
+const { results } = await db.map({
+  query: {
+    type: "Product",
+    price: { $between: [10, 100] }
+  }
+})
+
+// Date ranges (ISO format)
+const { results } = await db.map({
+  query: {
+    type: "Event",
+    date: { $between: ["2024-01-01", "2024-12-31"] }
+  }
+})
+```
+
+### $exists - Field Existence
+
+Matches nodes where the field exists (or doesn't exist).
+
+```javascript
+// Nodes with email field
+const { results } = await db.map({
+  query: {
+    email: { $exists: true }
+  }
+})
+
+// Nodes without deletion marker
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    deleted: { $exists: false }
+  }
+})
+```
+
+## Examples
+
+### Age Range Query
+
+```javascript
+const findUsersByAge = async (minAge, maxAge) => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      age: { $between: [minAge, maxAge] }
+    },
+    field: "age",
+    order: "asc"
+  })
+  
+  return results
+}
+
+const adults = await findUsersByAge(18, 99)
+console.log(`Found ${adults.length} adult users`)
+```
+
+### Price Filter
+
+```javascript
+// Products under $50
+const { results: budget } = await db.map({
+  query: {
+    type: "Product",
+    price: { $lte: 50 },
+    inStock: true
+  }
+})
+
+// Products over $1000
+const { results: premium } = await db.map({
+  query: {
+    type: "Product",
+    price: { $gt: 1000 }
+  }
+})
+```
+
+### Status Filtering
+
+```javascript
+// Active tasks (not completed or deleted)
+const { results } = await db.map({
+  query: {
+    type: "Task",
+    status: { $ne: "completed" },
+    deleted: { $exists: false }
+  }
+})
+```
+
+### Multi-Role Query
+
+```javascript
+const findStaff = async () => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      role: { $in: ["admin", "moderator", "editor"] }
+    },
+    field: "name",
+    order: "asc"
+  })
+  
+  return results
+}
+```
+
+### File Size Filter
+
+```javascript
+// Large files (over 10MB)
+const { results: largeFiles } = await db.map({
+  query: {
+    type: "File",
+    size: { $gt: 10 * 1024 * 1024 }  // 10MB in bytes
+  },
+  field: "size",
+  order: "desc"
+})
+
+// Medium files (1MB - 10MB)
+const { results: mediumFiles } = await db.map({
+  query: {
+    type: "File",
+    size: { $between: [1024 * 1024, 10 * 1024 * 1024] }
+  }
+})
+```
+
+### Date Range Queries
+
+```javascript
+// Posts from 2024
+const { results } = await db.map({
+  query: {
+    type: "Post",
+    createdAt: {
+      $between: [
+        new Date("2024-01-01").getTime(),
+        new Date("2024-12-31").getTime()
+      ]
+    }
+  }
+})
+
+// Recent posts (last 7 days)
+const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000)
+const { results: recent } = await db.map({
+  query: {
+    type: "Post",
+    createdAt: { $gt: sevenDaysAgo }
+  },
+  field: "createdAt",
+  order: "desc"
+})
+```
+
+### Combining Multiple Operators
+
+```javascript
+// Active users with complete profiles
+const { results } = await db.map({
+  query: {
+    type: "User",
+    status: { $eq: "active" },
+    age: { $gte: 18 },
+    email: { $exists: true },
+    verified: true
+  }
+})
+
+// Products in stock within price range
+const { results: products } = await db.map({
+  query: {
+    type: "Product",
+    price: { $between: [20, 200] },
+    inStock: true,
+    category: { $in: ["electronics", "computers"] }
+  }
+})
+```
+
+### Real-Time Price Monitoring
+
+```javascript
+const { unsubscribe } = await db.map(
+  {
+    query: {
+      type: "Product",
+      price: { $lte: 100 }
+    }
+  },
+  ({ id, value, action }) => {
+    if (action === "added") {
+      console.log(`New product under $100: ${value.name}`)
+      notifyUser(value)
+    }
+    if (action === "updated" && value.price > 100) {
+      console.log(`${value.name} now exceeds budget`)
+    }
+  }
+)
+```
+
+### Inventory Management
+
+```javascript
+// Low stock items
+const { results: lowStock } = await db.map({
+  query: {
+    type: "Product",
+    quantity: { $lt: 10 },
+    discontinued: { $exists: false }
+  },
+  field: "quantity",
+  order: "asc"
+})
+
+console.log(`${lowStock.length} items need reordering`)
+```
+
+## Operator Combinations
+
+<Info>
+You can combine multiple operators on the same field using logical operators:
+
+```javascript
+// Age NOT between 18-65
+const { results } = await db.map({
+  query: {
+    $or: [
+      { age: { $lt: 18 } },
+      { age: { $gt: 65 } }
+    ]
+  }
+})
+```
+</Info>
+
+## Type Support
+
+| Operator | Numbers | Strings | Dates | Booleans | Arrays |
+|----------|---------|---------|-------|----------|--------|
+| $eq      | ✅      | ✅      | ✅    | ✅       | ✅     |
+| $ne      | ✅      | ✅      | ✅    | ✅       | ✅     |
+| $gt      | ✅      | ✅      | ✅    | ❌       | ❌     |
+| $gte     | ✅      | ✅      | ✅    | ❌       | ❌     |
+| $lt      | ✅      | ✅      | ✅    | ❌       | ❌     |
+| $lte     | ✅      | ✅      | ✅    | ❌       | ❌     |
+| $in      | ✅      | ✅      | ✅    | ✅       | ✅     |
+| $between | ✅      | ✅      | ✅    | ❌       | ❌     |
+| $exists  | ✅      | ✅      | ✅    | ✅       | ✅     |
+
+## Best Practices
+
+<Tip>
+**Use $in for Multiple Values**: Instead of multiple $eq queries, use $in:
+
+```javascript
+// ✅ Good
+{ role: { $in: ["admin", "editor"] } }
+
+// ❌ Avoid
+{ $or: [{ role: "admin" }, { role: "editor" }] }
+```
+</Tip>
+
+<Warning>
+**Date Comparisons**: Always use timestamps (numbers) or ISO strings for consistent date comparisons:
+
+```javascript
+// ✅ Recommended
+{ createdAt: { $gt: Date.now() - 86400000 } }
+
+// ✅ Also good
+{ date: { $between: ["2024-01-01", "2024-12-31"] } }
+```
+</Warning>
+
+## Related Operators
+
+- [Text Search Operators](/api/operators/text-search) - $text for full-text search
+- [Logical Operators](/api/operators/logical) - $and, $or, $not
+- [Graph Traversal](/api/operators/graph-traversal) - $edge for relationships

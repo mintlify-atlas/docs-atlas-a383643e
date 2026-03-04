@@ -1,0 +1,446 @@
+---
+title: 'Radix Tree (rx)'
+description: 'High-performance prefix-based search with automatic indexing'
+---
+
+## Overview
+
+The Radix Tree module provides lightning-fast prefix-based search capabilities for GenosDB. Built on a radix tree (prefix tree) data structure, it's ideal for:
+
+- **Autocomplete**: Real-time search suggestions
+- **ID-based queries**: Fast lookup by ID prefix
+- **Hierarchical data**: Query structured identifiers
+- **Real-time filtering**: Instant prefix matching
+
+## Enabling the Module
+
+```javascript
+import { gdb } from "genosdb"
+
+const db = await gdb("my-database", { rx: true })
+```
+
+<Info>
+**Automatic Indexing**: The module automatically indexes all node properties on `put()` and updates the index on `remove()`. No manual index management required.
+</Info>
+
+## Features
+
+### Automatic Indexing
+
+Every `put()` and `remove()` operation automatically updates the Radix index:
+
+```javascript
+// These operations automatically update the index
+const id1 = await db.put({ type: "user", username: "alice_123" })
+const id2 = await db.put({ type: "user", username: "alicia_789" })
+const id3 = await db.put({ type: "document", name: "alpha-report.pdf" })
+
+await db.remove(id3) // Index updated on removal
+```
+
+### $startsWith Operator
+
+Query nodes by ID prefix using the `$startsWith` operator:
+
+```javascript
+const { results } = await db.map({
+  query: {
+    id: { $startsWith: "user:a" }
+  }
+})
+
+console.log("Matching nodes:", results)
+```
+
+### Direct Prefix Search
+
+Use the dedicated `searchByPrefix()` method:
+
+```javascript
+const nodes = await db.searchByPrefix("user:alice")
+
+console.log("Nodes:", nodes)
+```
+
+## Index Strategy
+
+The module indexes:
+
+### Strings
+
+All possible starting substrings:
+
+```javascript
+// "text" → "t", "te", "tex", "text"
+await db.put({ name: "text" })
+
+// Can search for any prefix
+await db.searchByPrefix("te") // Matches
+await db.searchByPrefix("tex") // Matches
+```
+
+### Numbers
+
+Converted to string representation:
+
+```javascript
+await db.put({ score: 123 })
+
+// Search by number prefix
+await db.searchByPrefix("12") // Matches score: 123
+```
+
+### Objects
+
+Indexes both keys and key-value pairs:
+
+```javascript
+await db.put({
+  type: "user",
+  score: 95
+})
+
+// Indexed as:
+// - "type"
+// - "type:user"
+// - "score"
+// - "score:95"
+
+const results = await db.searchByPrefix("type:u") // Matches
+const results2 = await db.searchByPrefix("score:9") // Matches
+```
+
+## Examples
+
+### Autocomplete User Search
+
+```javascript
+const autocompleteUsers = async (prefix) => {
+  const { results } = await db.map({
+    query: {
+      type: "User",
+      id: { $startsWith: `user:${prefix}` }
+    },
+    $limit: 10
+  })
+  
+  return results.map(user => user.value.username)
+}
+
+// User types "al"
+const suggestions = await autocompleteUsers("al")
+// Returns: ["alice", "alan", "alex", ...]
+```
+
+### Search by Username Prefix
+
+```javascript
+class UserSearch {
+  async search(prefix) {
+    const { results } = await db.map({
+      query: {
+        type: "User",
+        username: { $startsWith: prefix }
+      }
+    })
+    
+    return results
+  }
+  
+  async liveSearch(inputElement) {
+    inputElement.addEventListener("input", async (e) => {
+      const results = await this.search(e.target.value)
+      this.displayResults(results)
+    })
+  }
+  
+  displayResults(results) {
+    const html = results.map(user => `
+      <div class="result">
+        <strong>${user.value.username}</strong>
+        <span>${user.value.email}</span>
+      </div>
+    `).join("")
+    
+    document.getElementById("results").innerHTML = html
+  }
+}
+```
+
+### Find Files by Extension
+
+```javascript
+const findFiles = async (extension) => {
+  const nodes = await db.searchByPrefix(`file:${extension}`)
+  
+  return nodes.filter(node => 
+    node.value.type === "File" &&
+    node.value.name.endsWith(`.${extension}`)
+  )
+}
+
+const pdfs = await findFiles("pdf")
+const images = await findFiles("jpg")
+```
+
+### ID-based Queries
+
+```javascript
+// Store with structured IDs
+await db.put(
+  { type: "Order", status: "pending" },
+  "order:2024:03:001"
+)
+
+await db.put(
+  { type: "Order", status: "shipped" },
+  "order:2024:03:002"
+)
+
+// Find all orders from March 2024
+const { results } = await db.map({
+  query: {
+    id: { $startsWith: "order:2024:03" }
+  }
+})
+
+console.log("March orders:", results)
+```
+
+### Hierarchical Categories
+
+```javascript
+// Create category hierarchy
+await db.put(
+  { type: "Category", name: "Electronics" },
+  "cat:electronics"
+)
+
+await db.put(
+  { type: "Category", name: "Computers" },
+  "cat:electronics:computers"
+)
+
+await db.put(
+  { type: "Category", name: "Laptops" },
+  "cat:electronics:computers:laptops"
+)
+
+// Find all electronics subcategories
+const { results } = await db.map({
+  query: {
+    id: { $startsWith: "cat:electronics" }
+  }
+})
+```
+
+### Real-Time Autocomplete
+
+```javascript
+class Autocomplete {
+  constructor(db, inputId, resultsId) {
+    this.db = db
+    this.input = document.getElementById(inputId)
+    this.results = document.getElementById(resultsId)
+    
+    this.setupListener()
+  }
+  
+  setupListener() {
+    let timeout
+    
+    this.input.addEventListener("input", (e) => {
+      clearTimeout(timeout)
+      
+      const query = e.target.value.toLowerCase()
+      
+      if (query.length < 2) {
+        this.results.innerHTML = ""
+        return
+      }
+      
+      timeout = setTimeout(() => {
+        this.search(query)
+      }, 300) // Debounce
+    })
+  }
+  
+  async search(prefix) {
+    const { results } = await this.db.map({
+      query: {
+        type: "Product",
+        name: { $startsWith: prefix }
+      },
+      $limit: 10
+    })
+    
+    this.displayResults(results)
+  }
+  
+  displayResults(results) {
+    if (results.length === 0) {
+      this.results.innerHTML = "<div>No results</div>"
+      return
+    }
+    
+    const html = results.map(item => `
+      <div class="autocomplete-item" data-id="${item.id}">
+        ${item.value.name}
+      </div>
+    `).join("")
+    
+    this.results.innerHTML = html
+  }
+}
+
+// Usage
+const autocomplete = new Autocomplete(db, "search-input", "search-results")
+```
+
+### Combining with Other Filters
+
+```javascript
+// Find active users whose username starts with "a"
+const { results } = await db.map({
+  query: {
+    type: "User",
+    username: { $startsWith: "a" },
+    status: "active",
+    verified: true
+  },
+  field: "username",
+  order: "asc"
+})
+```
+
+## Performance Optimizations
+
+### Dynamic Fragmentation
+
+The module automatically manages memory:
+
+- **Auto-splitting**: When index exceeds 1MB, it splits into fragments
+- **Memory efficient**: Keeps only active fragments in memory
+- **Transparent**: No API changes, handled internally
+
+### Persistence
+
+- **Non-blocking I/O**: Uses Web Worker for file operations
+- **Debounced saves**: Batches writes (default 200ms)
+- **Compression**: MessagePack + zlib for compact storage
+
+### Query Optimization
+
+```javascript
+// ✅ Efficient - uses index
+const { results } = await db.map({
+  query: {
+    id: { $startsWith: "user:" }
+  }
+})
+
+// ❌ Slower - full scan
+const { results } = await db.map({
+  query: {
+    id: { $regex: "^user:" }
+  }
+})
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Autocomplete" icon="search">
+    Real-time search suggestions as users type
+  </Card>
+  <Card title="ID Lookup" icon="hashtag">
+    Fast queries by ID prefix or pattern
+  </Card>
+  <Card title="Category Browser" icon="sitemap">
+    Navigate hierarchical category structures
+  </Card>
+  <Card title="Tag Search" icon="tags">
+    Find content by tag prefixes
+  </Card>
+  <Card title="File Finder" icon="folder">
+    Search files by name or path prefix
+  </Card>
+  <Card title="User Directory" icon="users">
+    Browse users by username prefix
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Tip>
+**Use Structured IDs**: For best performance, use hierarchical IDs:
+
+```javascript
+// ✅ Good - enables prefix queries
+"user:alice:settings"
+"order:2024:03:001"
+"file:documents:reports:2024"
+
+// ❌ Less useful for prefix search
+"abc123xyz"
+```
+</Tip>
+
+<Tip>
+**Combine with $limit**: For autocomplete, always limit results:
+
+```javascript
+const { results } = await db.map({
+  query: { username: { $startsWith: prefix } },
+  $limit: 10 // Only show top 10
+})
+```
+</Tip>
+
+<Warning>
+**Memory Usage**: The index consumes memory proportional to your data:
+- Small datasets (< 10k nodes): Negligible impact
+- Large datasets (> 100k nodes): Monitor memory, fragmentation handles this automatically
+</Warning>
+
+## Comparison with Other Search Methods
+
+| Method | Performance | Use Case |
+|--------|-------------|----------|
+| `$startsWith` (Radix) | ⚡⚡⚡ Fast | Prefix matching |
+| `$regex` | ⚡ Slower | Complex patterns |
+| `$text` | ⚡⚡ Medium | Full-text search |
+| Full scan | ⚡ Slowest | No filter |
+
+## Technical Details
+
+### Data Structure
+
+```javascript
+// Conceptual index structure
+{
+  "u": ["id_1", "id_2"],
+  "us": ["id_1", "id_2"],
+  "use": ["id_1", "id_2"],
+  "user": ["id_1", "id_2"],
+  "user:a": ["id_1"],
+  "user:al": ["id_1"],
+  "user:ali": ["id_1"],
+  "user:alic": ["id_1"],
+  "user:alice": ["id_1"]
+}
+```
+
+### Storage
+
+- **Location**: OPFS (Origin Private File System) in browser
+- **Format**: MessagePack + zlib compression
+- **Worker**: Non-blocking file operations
+- **Size**: Typically 10-20% of database size
+
+## Related Features
+
+- [Text Search Operator](/api/operators/text-search) - $text and $regex
+- [Comparison Operators](/api/operators/comparison) - Other query operators
+- [NLQ Module](/modules/nlq) - Natural language queries
